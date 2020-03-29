@@ -1,3 +1,4 @@
 .stack-work/
 concur-control.cabal
 *~
+concur-control.nix
