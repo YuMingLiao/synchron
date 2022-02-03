@@ -739,7 +739,7 @@ run nid p = Context nid <$> newMVar (Just (0, p, E))
 push :: Typeable v => Monoid v => Context v b -> Event t a -> a -> IO (Maybe b, v)
 push (Context nid v) (Event conc ei) a = modifyMVar v $ \v -> case v of
   Just (eid, p, v) -> do
-    r <- stepAll [M.singleton (setNid ei') (EventValue (Event conc ei') a)] nid eid p v
+    r <- stepAll [M.singleton (setNid ei') {- Redundant setNid -} (EventValue (Event conc ei') a)] nid eid p v
 
     case r of
       (Left a, v', _) -> pure (Nothing, (a, foldV v'))
@@ -757,7 +757,7 @@ event nid app = newEvent nid >>= app
 
 --------------------------------------------------------------------------------
 
-newTrail :: Monoid v => Context v a -> IO (Trail v a)
+--newTrail :: Monoid v => Context v a -> IO (Trail v a)
 newTrail (Context nid ctx) = do
   pure $ Trail
     { trNotify  = undefined

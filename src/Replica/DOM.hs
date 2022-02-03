@@ -37,23 +37,26 @@ runReplica p = do
   let nid = NodeId 0
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
-  Warp.run 3985 $ Replica.app (defaultIndex "Synchron" []) defaultConnectionOptions Prelude.id () $ \() -> do
+  Warp.run 3985 $ Replica.app (defaultIndex "Synchron" []) defaultConnectionOptions Prelude.id (pure ()) (\ctx -> pure ()) $  \_ _ _ -> do
     takeMVar block
-
+    -- _ :: IO (R.HTML, Replica.Event -> Maybe (IO ()), IO (Maybe ()))
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
         r <- stepAll mempty nid eid p v
         case r of
           (Left _, v', _) -> do
-            pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), (), \_ -> pure (pure ())))
+            pure (Nothing :: Maybe (Int, Syn HTML (), V HTML), 
+                  (runHTML (foldV v') (Context nid ctx), 
+                  (\_ -> Just (pure ())) :: Replica.Event -> Maybe (IO ()), 
+                  pure (Just ()) :: IO (Maybe ())))
           (Right (eid', p'), v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
             -- putStrLn (BC.unpack $ A.encode html)
             pure
               ( Just (eid', p', v')
-              , Just (html, (), \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re))
+              , (html, \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re), pure (Just ()))
               )
-      Nothing -> pure (Nothing, Nothing)
+      Nothing -> pure (Nothing, (undefined,undefined,pure Nothing))
 
 el' :: Maybe R.Namespace -> T.Text -> [Props a] -> [Syn HTML a] -> Syn HTML a
 el' ns e attrs children = do
@@ -69,7 +72,7 @@ el' ns e attrs children = do
     toAttr (Props k (PropText v)) = pure ((k, \_ -> AText v), [])
     toAttr (Props k (PropBool v)) = pure ((k, \_ -> ABool v), [])
     toAttr (Props k (PropEvent extract)) = local $ \e -> do
-      pure ((k, \ctx -> AEvent $ \de -> void $ push ctx e de), [extract <$> await e])
+      pure ((k, \ctx -> AEvent (R.EventOptions False False False) (\de -> void $ push ctx e de)), [extract <$> await e])
     toAttr (Props k (PropMap m)) = do
       m' <- mapM toAttr m
       pure ((k, \ctx -> AMap $ M.fromList $ fmap (second ($ ctx) . fst) m'), concatMap snd m')

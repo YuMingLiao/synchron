@@ -11,14 +11,16 @@ import qualified Data.Text                as T
 
 import           Replica.VDOM.Types       (DOMEvent(getDOMEvent))
 
+import           Debug.Trace
+
 -- TODO: return Maybe here
 extractResult :: A.Result a -> a
 extractResult (A.Success a) = a
-extractResult (A.Error e)   = error e
+extractResult (A.Error e)   = error (traceShowId e)
 
 data Target = Target
   { targetValue :: T.Text
-  }
+  } deriving Show
 
 instance A.FromJSON Target where
   parseJSON (A.Object o) = Target
@@ -36,7 +38,7 @@ data BaseEvent = BaseEvent
   , timeStamp        :: !Double
   , eventType        :: !T.Text
   , isTrusted        :: !Bool
-  }
+  } deriving Show
 
 instance A.FromJSON BaseEvent where
   parseJSON (A.Object o) = BaseEvent
@@ -99,7 +101,7 @@ data KeyboardEvent = KeyboardEvent
   , kbdMetaKey     :: !Bool
   , kbdRepeat      :: !Bool
   , kbdShiftKey    :: !Bool
-  }
+  } deriving Show
 
 instance A.FromJSON KeyboardEvent where
   parseJSON obj@(A.Object o) = KeyboardEvent
@@ -144,8 +146,9 @@ onChange :: Props BaseEvent
 onChange = Props "onChange" (PropEvent (extractResult . A.fromJSON . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keydown
+-- issue: Enter is Okay, but 1 is object expected. They both got Object return. What happened?
 onKeyDown :: Props KeyboardEvent
-onKeyDown = Props "onKeyDown" (PropEvent (extractResult . A.fromJSON . getDOMEvent))
+onKeyDown = Props "onKeyDown" (PropEvent (extractResult . A.fromJSON . (\v -> trace (take 10 (show v)) v) . getDOMEvent))
 
 -- | https://developer.mozilla.org/en-US/docs/Web/Events/keypress
 onKeyPress :: Props KeyboardEvent

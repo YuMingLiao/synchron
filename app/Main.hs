@@ -16,19 +16,21 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import           Data.Semigroup (Last (..))
 
+import           Concur (runConcur, step, orr', withPool)
+
 import qualified Connector.WebSocket as WS
 
 import qualified Connector.Log as Log
 import qualified Connector.HTTP as HTTP
 
 import           Replica.VDOM             (Attr(AText, ABool, AEvent, AMap), HTML, DOMEvent, VDOM(VNode, VText), defaultIndex, fireEvent)
-import           Replica.VDOM.Types       (DOMEvent(DOMEvent))
+import           Replica.VDOM.Types       (DOMEvent(DOMEvent), EventOptions(..))
 import           Replica.DOM hiding       (var)
 import           Replica.SVG
 import           Replica.SVG.Props hiding (r)
-import           Replica.Props hiding     (async, loop)
+import           Replica.Props hiding     (async, loop, step)
 import           Replica.Events
-import           Syn
+import           Syn                      hiding (orr')
 import           Syn.SVG.Replica
 
 import           Var
@@ -45,73 +47,75 @@ import Prelude hiding (div, forever, span)
 import Debug.Trace
 import System.IO.Unsafe
 
--- testConcur :: IO ()
--- testConcur = Log.logger $ \log -> do
---   v1 <- registerDelay 1000000
---   v2 <- registerDelay 2000000
---   v3 <- registerDelay 1500000
---   v4 <- registerDelay 3000000
---   v5 <- registerDelay 2500000
--- 
---   (_, rs) <- runConcur $ do
---     (_, rs) <- orr'
---       [ dp log v3 "V3"
---       , dp log v5 "V5"
---       , do
---           (_, rs) <- orr' [ dp log v1 "A", dp log v2 "B", dp log v4 "C" ]
---           (_, rs) <- orr' rs
---           (_, rs) <- orr' rs
---           pure ()
---       ]
---     (_, rs) <- orr' rs
---     orr' rs
--- 
---   print $ length rs
--- 
---   where
---     dp log v s = do
---       log ("BEFORE: " <> s)
---       step $ do
---         v' <- readTVar v
---         check v'
---       log ("AFTER: " <> s)
--- 
---     f c n = do
---       step $ writeTChan c (show n)
---       f c (n + 1)
+-- or can have remains. correct time logic.
+testConcur :: IO ()
+testConcur = Log.logger $ \log -> do
+  v1 <- registerDelay 1000000
+  v2 <- registerDelay 2000000
+  v3 <- registerDelay 1500000
+  v4 <- registerDelay 3000000
+  v5 <- registerDelay 2500000
 
--- testConnectors :: IO ()
--- testConnectors = do
---   HTTP.http 3921 $ \http ->
---     WS.websocket 3922 defaultConnectionOptions $ \wss ->
---     WS.websocket 3923 defaultConnectionOptions $ \wss2 ->
---     Log.logger $ \log -> do
--- 
---       runConcur $ auth http log wss wss2
--- 
---     where
---       auth http log wss wss2 = do
---         r <- HTTP.receive http $ \req respond -> do
---           r <- respond $ responseLBS status200 [] "Hello World"
---           pure (r, "good")
---         log r
---         server log wss wss2
---       
---       server log wss wss2 = withPool $ \pool -> forever $ do
---         [ws, ws2] <- andd [ WS.accept wss, WS.accept wss2 ]
---         spawn pool (go log ws ws2)
---         
---       go log ws ws2 = do
---         r <- orr
---           [ fmap Left  <$> WS.receive ws
---           , fmap Right <$> WS.receive ws2
---           ]
---         case r of
---           Nothing  -> pure ()
---           _  -> do
---             log $ show r
---             go log ws ws2
+  (_, rs) <- runConcur $ do
+    (_, rs) <- orr'
+      [ dp log v3 "V3"
+      , dp log v5 "V5"
+      , do
+          (_, rs) <- orr' [ dp log v1 "A", dp log v2 "B", dp log v4 "C" ]
+          (_, rs) <- orr' rs
+          (_, rs) <- orr' rs
+          pure ()
+      ]
+    (_, rs) <- orr' rs
+    orr' rs
 
+  print $ length rs
+
+  where
+    dp log v s = do
+      log ("BEFORE: " <> s)
+      step $ do
+        v' <- readTVar v
+        check v'
+      log ("AFTER: " <> s)
+
+    f c n = do
+      step $ writeTChan c (show n)
+      f c (n + 1)
+
+-- log has wrong type. Log.logger has wrong type.
+--testConnectors :: IO ()
+--testConnectors = do
+--  HTTP.http 3921 $ \http ->
+--    void $ WS.websocket 3922 defaultConnectionOptions $ \wss ->
+--    WS.websocket 3923 defaultConnectionOptions $ \wss2 ->
+--    Log.logger $ \log -> do
+--      runConcur $ auth http log wss wss2
+--    where
+--      auth http log wss wss2 = do
+--        r <- HTTP.receive http $ \req respond -> do
+--          r <- respond $ responseLBS status200 [] "Hello World"
+--          pure (r, "good")
+--        log r
+--        server log wss wss2
+--      
+--      server log wss wss2 = withPool $ \pool -> Syn.forever $ do
+--        [ws, ws2] <- andd [ WS.accept wss, WS.accept wss2 ]
+--        spawn pool (go log ws ws2)
+--        
+--      go log ws ws2 = do
+--        r <- orr
+--          [ fmap Left  <$> WS.receive ws
+--          , fmap Right <$> WS.receive ws2
+--          ]
+--        case r of
+--          Nothing  -> pure ()
+--          _  -> do
+--            log $ show r
+--            go log ws ws2
+
+
+-- no ouput. Not sure how it works. needs a specific logger
 testWebsockets :: IO (Context () ())
 testWebsockets =
   WS.websocket 3922 defaultConnectionOptions $ \wss -> do
@@ -127,6 +131,7 @@ testWebsockets =
     WS.send ws2 d
     WS.send ws2 d2
 
+-- output nothing
 testChat :: IO (Context () ())
 testChat
   = WS.websocket 3922 defaultConnectionOptions $ \wss ->
@@ -149,8 +154,8 @@ testChat
         Right msg -> WS.send ws msg
       chatConn ws msg
 
-main :: IO ()
-main = pure ()
+-- main :: IO ()
+main = Syn.run (NodeId 0) shared -- pure ()
 
 -- Replica ---------------------------------------------------------------------
 
@@ -166,7 +171,7 @@ toHTML (Container props children) = HTML $ \ctx ->
       (concatMap (($ ctx) . runHTML . toHTML) children)
   ]
   where
-    toProps ctx (Click e) = ("onClick", AEvent $ \de -> void $ push ctx e de)
+    toProps ctx (Click e) = ("onClick", AEvent (EventOptions False False False) (\de -> void $ push ctx e de))
 
 -- abstractConter :: Event Internal Int -> Int -> Syn Container a
 -- abstractConter o x = local $ \e -> local $ \f -> do
@@ -188,12 +193,14 @@ counter x = do
   div [ onClick ] [ text (T.pack $ show x) ]
   counter (x + 1)
 
+-- it works!
 testReplica = do
   runReplica $ local $ \e -> do
     div [ style [("color", "red")], onClick ] [ text "Synchron" ]
     div [ style [("color", "green")], onClick ] [ text "Synchron2" ]
     div [ style [("color", "blue")] ] [ text "Synchron3" ]
 
+-- fromJSON error on keys that have space.
 inputOnEnter p v = do
   e <- input [ autofocus True, placeholder p, value v, Left <$> onInput, Right <$> onKeyDown ]
   case e of
@@ -222,8 +229,10 @@ additions = pool $ \p -> do
   
 --------------------------------------------------------------------------------
 
+-- no output. use test function in test/. can't wait 4. If get is before set, 4 is gottable. race condition I guess.
 shared :: Syn () ()
 shared = local $ \end -> local $ \st -> pool $ \p -> do
+  async (print "hello")
   spawn p (set st end)
   spawn p (get st)
   await end
@@ -276,6 +285,11 @@ rr = r . r
 
 data Filter = Active | Inactive | All deriving Show
 
+-- same, stuck at inputOnEnter error
+testTodo' = do 
+  runReplica $ pool $ \p -> var (Last Inactive) $ \v -> do
+    todo' v 0 p 
+ 
 todo' v x p = do
   t <- inputOnEnter "What needs to be done?" ""
   spawn p (div [ key (T.pack $ show x) ] [ todo v (Todo t False) ])
@@ -352,6 +366,8 @@ remoteText nid v = do
   ctx <- remoteContext nid v
   newTrail ctx
 
+-- inputOnEnter seems has event trouble.
+testRemote :: IO ()
 testRemote = do
   runReplica $ pool $ \p -> var (Last "") $ \v -> do
     spawn p (go v)
@@ -368,7 +384,7 @@ testRemote = do
       go v
 
 --------------------------------------------------------------------------------
-
+-- not sure what synSvg' do.
 trail p = runReplica $ svg
   [ width "1000", height "1000", version "1.1", xmlns ]
   [ synSvg' p ]

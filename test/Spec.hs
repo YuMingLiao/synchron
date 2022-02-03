@@ -16,6 +16,8 @@ emit = Syn.emit
 await :: Event t a -> Syn () a
 await = Syn.await
 
+-- andd gets a sequence of results by the finish order.
+-- orr gets one last result. 
 p1 = local $ \e -> do
   a <- andd (await e, emit e "A", emit e "C")
   b <- orr [ Left <$> await e, Right <$> emit e "B" ]
@@ -27,21 +29,26 @@ p2 = local $ \e -> do
 p2_2 = local $ \e -> do
   andd (await e, emit e "E")
 
+-- result value can have functors and applicatives
 p2_3 = local $ \e -> do
   andd ((emit e "E" >> emit e "F"), ((,) <$> await e <*> await e))
 
 p2_4 = local $ \e -> local $ \f -> do
   andd (andd (await e, await f), orr [ emit e 5, emit f 6 ])
 
+-- await one of ...
 p2_5 = local $ \e -> local $ \f -> do
   andd (orr [ await e, await f ], orr [ emit e 5, emit f 6 ])
 
+-- orr has a sequence
 p2_6 = local $ \e -> do
   orr [ Left <$> emit e "E", Right <$> await e ]
 
+-- orr has a sequence
 p2_7 = local $ \e -> do
   orr [ Right <$> await e, Left <$> emit e "E" ]
 
+-- two events
 p3 = local $ \e -> local $ \f -> do
   a <- andd
          ( await e >> emit f "F"
@@ -50,6 +57,7 @@ p3 = local $ \e -> local $ \f -> do
          )
   pure a
 
+-- interleave events and awaits, assign pure value
 p4 = local $ \e -> local $ \f -> do
   a <- andd
          ( andd (await e, emit f "F")
@@ -58,6 +66,7 @@ p4 = local $ \e -> local $ \f -> do
          )
   pure a
 
+-- case switch after await, recurse with variable or return.
 p5 = local $ \e -> do
   andd
     ( go 0 e
@@ -71,6 +80,7 @@ p5 = local $ \e -> do
         Left n  -> go (s + n) e
         Right _ -> pure s
 
+-- interleave emits and awaits
 p6 = local $ \e -> local $ \f -> local $ \g -> do
   a <- andd
     ( andd (await e, emit f "F" >> await g >> emit e "E")
@@ -80,6 +90,7 @@ p6 = local $ \e -> local $ \f -> local $ \g -> do
     )
   pure a
 
+-- interleave
 p6_2 = local $ \e -> local $ \f -> local $ \g -> do
   a <- andd
     ( andd (await e, emit f "F" >> andd (await g, await g) >> emit e "E")
@@ -89,6 +100,7 @@ p6_2 = local $ \e -> local $ \f -> local $ \g -> do
     )
   pure a
 
+-- accumulation, send ending event in the end
 p7 = local $ \e -> local $ \f -> do
   andd
     ( go 0 0 e f
@@ -127,6 +139,7 @@ p9 = local $ \e -> pool $ \p -> do
 
   pure (a + b + c)
 
+-- spawn in spawn
 p9_2 = local $ \e -> pool $ \p -> do
   spawn p (emit e 5)
   a <- await e
@@ -137,6 +150,7 @@ p9_2 = local $ \e -> pool $ \p -> do
 
   pure (a + b + c)
 
+-- n times await
 p10 = local $ \i -> local $ \o -> pool $ \p -> do
   spawn p (go i o 0 3)
 
@@ -148,6 +162,7 @@ p10 = local $ \i -> local $ \o -> pool $ \p -> do
       a <- await i
       go i o (x + a) (n - 1)
 
+-- local vs event 
 e12 result = event localNid $ \e -> do
   ctx <- run localNid $ do
     a <- andd' [ await e, await e ]
@@ -174,6 +189,24 @@ e14 result = event localNid $ \e -> do
   push ctx e ("E","E")
 
   pure ctx
+
+-- shared event (?)
+shared = local $ \end -> local $ \st -> pool $ \p -> do
+  spawn p (get st)
+  spawn p (set st end)
+  await end
+  where
+    set st end = do
+      emit st 4
+      emit st 5
+      emit st 6
+      emit st 7
+      emit end ()
+
+    get st = do
+      a <- await st
+      async (print a)
+      get st
 
 --------------------------------------------------------------------------------
 
@@ -211,4 +244,5 @@ main = defaultMain $ testGroup "Example tests"
   , testCase "e12" $ testE e12 ["E", "E"]
   , testCase "e13" $ testE e13 ("E","E","E",())
   , testCase "e14" $ testE e14 (("E","E"),("E","E"),("F","F"),())
+  , testCase "shared" $ test shared ()
   ]
