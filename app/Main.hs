@@ -44,6 +44,7 @@ import Prelude hiding (div, forever, span)
 
 import Debug.Trace
 import System.IO.Unsafe
+import Concur (runConcur, withPool)
 
 -- testConcur :: IO ()
 -- testConcur = Log.logger $ \log -> do
@@ -97,7 +98,7 @@ import System.IO.Unsafe
 --         log r
 --         server log wss wss2
 --       
---       server log wss wss2 = withPool $ \pool -> forever $ do
+--       server log wss wss2 = withPool $ \pool -> Syn.forever $ do
 --         [ws, ws2] <- andd [ WS.accept wss, WS.accept wss2 ]
 --         spawn pool (go log ws ws2)
 --         
@@ -111,7 +112,7 @@ import System.IO.Unsafe
 --           _  -> do
 --             log $ show r
 --             go log ws ws2
-
+-- 
 testWebsockets :: IO (Context () ())
 testWebsockets =
   WS.websocket 3922 defaultConnectionOptions $ \wss -> do
@@ -149,8 +150,7 @@ testChat
         Right msg -> WS.send ws msg
       chatConn ws msg
 
-main :: IO ()
-main = pure ()
+main = testConnectors 
 
 -- Replica ---------------------------------------------------------------------
 
@@ -251,7 +251,7 @@ testDist = do
 
     let remoteCounter = newTrail ctx
 
-    run (NodeId 0) $ local $ \e -> do
+    runReplica $ local $ \e -> do
       div [] [ remote remoteCounter, remote remoteCounter ]
 
   where
