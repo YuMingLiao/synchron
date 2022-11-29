@@ -37,7 +37,7 @@ runReplica p = do
   let nid = NodeId 0
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
-  Warp.run 3985 $ Replica.app (defaultIndex "Synchron" []) defaultConnectionOptions Prelude.id (pure ()) (pure ())$ \_ -> \_ -> \() -> do
+  Warp.run 3985 $ Replica.app (defaultIndex "Synchron" []) defaultConnectionOptions Prelude.id (pure ()) (\_ -> pure ()) $ \_ -> \_ -> \() -> do
     takeMVar block
 
     modifyMVar ctx $ \ctx' -> case ctx' of
@@ -45,15 +45,15 @@ runReplica p = do
         r <- stepAll mempty nid eid p v
         case r of
           (Left _, v', _) -> do
-            pure (Nothing, (runHTML (foldV v') (Context nid ctx), \_ -> pure (pure ()), pure (Just ())))
+            pure (Nothing, (Just $ runHTML (foldV v') (Context nid ctx), \_ -> pure (pure ()), pure (Just ())))
           (Right (eid', p'), v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
             -- putStrLn (BC.unpack $ A.encode html)
             pure
               ( Just (eid', p', v')
-              , (html, \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re), pure (Just ()))
+              , (Just html, \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re), pure (Just ()))
               )
-      Nothing -> pure (Nothing, (empty , \_ -> pure (pure ()), pure Nothing))
+      Nothing -> pure (Nothing, (Nothing, \_ -> pure (pure ()), pure Nothing))
 
 el' :: Maybe R.Namespace -> T.Text -> [Props a] -> [Syn HTML a] -> Syn HTML a
 el' ns e attrs children = do
