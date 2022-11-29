@@ -37,7 +37,7 @@ runReplica p = do
   let nid = NodeId 0
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
-  Warp.run 3985 $ Replica.app (defaultIndex "Synchron" []) defaultConnectionOptions Prelude.id (pure ()) $ \_ -> \() -> do
+  Warp.run 3985 $ Replica.app (defaultIndex "Synchron" []) defaultConnectionOptions Prelude.id (pure ()) (pure ())$ \_ -> \_ -> \() -> do
     takeMVar block
 
     modifyMVar ctx $ \ctx' -> case ctx' of
