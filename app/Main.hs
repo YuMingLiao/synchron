@@ -22,7 +22,7 @@ import qualified Connector.Log as Log
 import qualified Connector.HTTP as HTTP
 
 import           Replica.VDOM             (Attr(AText, ABool, AEvent, AMap), HTML, DOMEvent, VDOM(VNode, VText), defaultIndex, fireEvent)
-import           Replica.VDOM.Types       (DOMEvent(DOMEvent))
+import           Replica.VDOM.Types       (DOMEvent(DOMEvent), EventOptions(..))
 import           Replica.DOM hiding       (var)
 import           Replica.SVG
 import           Replica.SVG.Props hiding (r)
@@ -166,7 +166,7 @@ toHTML (Container props children) = HTML $ \ctx ->
       (concatMap (($ ctx) . runHTML . toHTML) children)
   ]
   where
-    toProps ctx (Click e) = ("onClick", AEvent $ \de -> void $ push ctx e de)
+    toProps ctx (Click e) = ("onClick", AEvent (EventOptions False False False) $ \de -> void $ push ctx e de)
 
 -- abstractConter :: Event Internal Int -> Int -> Syn Container a
 -- abstractConter o x = local $ \e -> local $ \f -> do

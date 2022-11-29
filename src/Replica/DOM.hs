@@ -20,7 +20,7 @@ import qualified Data.Map                 as M
 
 import           Replica.VDOM             (Attr(AText, ABool, AEvent, AMap), DOMEvent, VDOM(VNode, VText), fireEvent, defaultIndex)
 import qualified Replica.VDOM             as R
-import           Replica.VDOM.Types       (DOMEvent(DOMEvent))
+import           Replica.VDOM.Types       (DOMEvent(DOMEvent), EventOptions(..))
 import qualified Replica.VDOM.Types       as R
 
 import qualified Network.Wai.Handler.Warp as Warp
@@ -69,7 +69,7 @@ el' ns e attrs children = do
     toAttr (Props k (PropText v)) = pure ((k, \_ -> AText v), [])
     toAttr (Props k (PropBool v)) = pure ((k, \_ -> ABool v), [])
     toAttr (Props k (PropEvent extract)) = local $ \e -> do
-      pure ((k, \ctx -> AEvent $ \de -> void $ push ctx e de), [extract <$> await e])
+      pure ((k, \ctx -> AEvent (EventOptions False False False) $ \de -> void $ push ctx e de), [extract <$> await e])
     toAttr (Props k (PropMap m)) = do
       m' <- mapM toAttr m
       pure ((k, \ctx -> AMap $ M.fromList $ fmap (second ($ ctx) . fst) m'), concatMap snd m')
