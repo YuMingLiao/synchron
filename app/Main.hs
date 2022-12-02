@@ -150,7 +150,7 @@ testChat
         Right msg -> WS.send ws msg
       chatConn ws msg
 
-main = pure () 
+main = runReplica (counter 0)
 
 -- Replica ---------------------------------------------------------------------
 

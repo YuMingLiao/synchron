@@ -25,35 +25,45 @@ import qualified Replica.VDOM.Types       as R
 
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.Replica as Replica
+import qualified Replica.Types as Replica
 import Network.WebSockets.Connection (defaultConnectionOptions)
-
+import Chronos.Types as Ch
+import Control.Monad.IO.Class (liftIO)
+import Colog.Core hiding (E)
+import Data.Text.IO as TIO
+import Replica.Log (Log, format)
 import           Syn
 
 newtype HTML = HTML { runHTML :: Context HTML () -> R.HTML }
   deriving (Semigroup, Monoid)
+
+logAction :: LogAction IO (Time, Log)
+logAction = LogAction $ \(x,y) -> liftIO $ TIO.putStrLn $ format (x,y)
+
+minute n = Ch.Timespan (n * 1000000000 * 60)
 
 runReplica :: Syn Replica.DOM.HTML () -> IO ()
 runReplica p = do
   let nid = NodeId 0
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
-  Warp.run 3985 $ Replica.app (defaultIndex "Synchron" []) defaultConnectionOptions Prelude.id (pure ()) (\_ -> pure ()) $ \_ -> \_ -> \() -> do
+  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO <$> \() -> do
     takeMVar block
-
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
         r <- stepAll mempty nid eid p v
         case r of
           (Left _, v', _) -> do
-            pure (Nothing, (Just $ runHTML (foldV v') (Context nid ctx), \_ -> pure (pure ()), pure (Just ())))
+            pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), ())) 
           (Right (eid', p'), v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
             -- putStrLn (BC.unpack $ A.encode html)
+            -- \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re)
             pure
               ( Just (eid', p', v')
-              , (Just html, \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re), pure (Just ()))
+              , Just (html, ())
               )
-      Nothing -> pure (Nothing, (Nothing, \_ -> pure (pure ()), pure Nothing))
+      Nothing -> pure (Nothing, Nothing)
 
 el' :: Maybe R.Namespace -> T.Text -> [Props a] -> [Syn HTML a] -> Syn HTML a
 el' ns e attrs children = do
