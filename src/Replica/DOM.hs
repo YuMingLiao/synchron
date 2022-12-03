@@ -33,6 +33,7 @@ import Colog.Core hiding (E)
 import Data.Text.IO as TIO
 import Replica.Log (Log, format)
 import           Syn
+import Debug.Trace
 
 newtype HTML = HTML { runHTML :: Context HTML () -> R.HTML }
   deriving (Semigroup, Monoid)
@@ -48,7 +49,8 @@ runReplica p = do
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO <$> \() -> do
-    takeMVar block
+    traceIO "in Syn's cfgStep"
+    --takeMVar block
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
         r <- stepAll mempty nid eid p v
