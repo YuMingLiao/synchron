@@ -44,7 +44,7 @@ import Prelude hiding (div, forever, span)
 
 import Debug.Trace
 import System.IO.Unsafe
-import Concur (runConcur, withPool)
+import Concur (runConcur, withPool, step)
 
 -- testConcur :: IO ()
 -- testConcur = Log.logger $ \log -> do
@@ -72,15 +72,15 @@ import Concur (runConcur, withPool)
 --   where
 --     dp log v s = do
 --       log ("BEFORE: " <> s)
---       step $ do
+--       Concur.step $ do
 --         v' <- readTVar v
 --         check v'
 --       log ("AFTER: " <> s)
 -- 
 --     f c n = do
---       step $ writeTChan c (show n)
+--       Concur.step $ writeTChan c (show n)
 --       f c (n + 1)
-
+-- 
 -- testConnectors :: IO ()
 -- testConnectors = do
 --   HTTP.http 3921 $ \http ->
