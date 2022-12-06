@@ -34,6 +34,7 @@ import Data.Text.IO as TIO
 import Replica.Log (Log, format)
 import           Syn
 import Debug.Trace
+import Control.Monad.STM
 
 newtype HTML = HTML { runHTML :: Context HTML () -> R.HTML }
   deriving (Semigroup, Monoid)
@@ -50,20 +51,21 @@ runReplica p = do
   block <- newMVar ()
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO <$> \() -> do
     traceIO "in Syn's cfgStep"
-    --takeMVar block
+    takeMVar block
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
         r <- stepAll mempty nid eid p v
         case r of
           (Left _, v', _) -> do
-            pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), ())) 
+            pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), (), pure ())) 
           (Right (eid', p'), v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
+                unblock = putMVar block ()
             -- putStrLn (BC.unpack $ A.encode html)
             -- \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re)
             pure
               ( Just (eid', p', v')
-              , Just (html, ())
+              , Just (html, (), unblock)
               )
       Nothing -> pure (Nothing, Nothing)
 
