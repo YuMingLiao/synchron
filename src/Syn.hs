@@ -64,6 +64,8 @@ data Trail v a = Trail
 data SynF v next
   = Async (IO ()) next
 
+  | forall a. StepIO (IO a) (a -> next) 
+
   | Forever
 
   | View v next
@@ -137,6 +139,9 @@ remote trail = Syn $ liftF (Remote trail id)
 
 async :: IO () -> Syn v ()
 async io = Syn $ liftF (Async io ())
+
+io :: IO a -> Syn v a
+io io = Syn $ liftF (StepIO io id)
 
 forever :: Syn v a
 forever = Syn $ liftF Forever
@@ -397,6 +402,10 @@ advance nid eid ios rsp@(Syn (Free (Emit (EventValue (Event _ e) _) _))) v
 advance nid eid ios (Syn (Free (Async io next))) v
   = advance nid eid (io:ios) (Syn next) v
 
+-- stepIO:  what happen to io in advance? it seems advance only used in dbg.
+advance nid eid ios rsp@(Syn (Free (StepIO io next))) v
+  = undefined 
+
 -- and
 advance nid eid ios rsp@(Syn (Free (And p q next))) v
   = case (p', q') of
@@ -531,6 +540,11 @@ advanceIO nid eid ios rsp@(Syn (Free (Emit (EventValue (Event _ e) _) _))) v
 -- async
 advanceIO nid eid ios (Syn (Free (Async io next))) v
   = advanceIO nid eid (io:ios) (Syn next) v
+
+-- stepIO
+advanceIO nid eid ios rsp@(Syn (Free (StepIO io next))) v = do
+  a <- io
+  pure (eid, ios, Syn (next a), \_ -> DbgDone, v)
 
 -- and
 advanceIO nid eid ios rsp@(Syn (Free (And p q next))) v = do
