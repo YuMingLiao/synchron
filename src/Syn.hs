@@ -66,6 +66,10 @@ data SynF v next
 
   | forall a. StepIO (IO a) (a -> next) 
 
+  | forall a. StepBlock (IO a) (a -> next) 
+
+  | forall a. StepSTM (STM a) (a -> next) 
+
   | Forever
 
   | View v next
@@ -83,7 +87,7 @@ data SynF v next
 
   | forall a b. Dyn (Event Internal [Syn v ()]) (Syn v b) [(Syn v (), V v)] (b -> next)
 
-  | forall a. Or (Syn v a) (Syn v a) (a -> next)
+  | forall a. Or [Syn v a] (a -> next)
   | forall a b. And (Syn v a) (Syn v b) ((a, b) -> next)
 
 deriving instance Functor (SynF v)
@@ -117,7 +121,7 @@ instance Show (Syn v a) where
   show (Syn (Free (Local _ _ _))) = "local"
   show (Syn (Free (Emit (EventValue (Event _ e) _) _))) = evColor e "▲"
   show (Syn (Free (Await (Event _ e) _))) = evColor e "○"
-  show (Syn (Free (Or a b _))) = "∨ [" <> intercalate ", " (map show [a, b]) <> "]"
+  show (Syn (Free (Or as _))) = "∨ [" <> intercalate ", " (map show as) <> "]"
   show (Syn (Free (And a b _))) = "∧ [" <> show a <> ", " <> show b <> "]"
 
 data DbgBinOp = DbgAnd | DbgOr deriving (Eq, Show)
@@ -130,6 +134,7 @@ data DbgSyn
   | DbgEmit EventId DbgSyn
   | DbgJoin DbgSyn
   | DbgBin DbgBinOp (DbgSyn -> DbgSyn) (DbgSyn -> DbgSyn) DbgSyn
+  | DbgMul DbgBinOp [(DbgSyn -> DbgSyn)] DbgSyn
 
 mapView :: Monoid u => (u -> v) -> Syn u a -> Syn v a
 mapView f m = Syn $ liftF (MapView f m id)
@@ -141,7 +146,16 @@ async :: IO () -> Syn v ()
 async io = Syn $ liftF (Async io ())
 
 io :: IO a -> Syn v a
-io io = Syn $ liftF (StepIO io id)
+io a = Syn $ liftF (StepIO a id)
+
+effect :: IO a -> Syn v a
+effect a = Syn $ liftF (StepBlock a id)
+
+liftSTM :: STM a -> Syn v a
+liftSTM a = Syn $ liftF (StepSTM a id)
+
+
+
 
 forever :: Syn v a
 forever = Syn $ liftF Forever
@@ -167,14 +181,8 @@ await e = Syn $ liftF (Await e id)
 reify :: Event Internal (Syn v a, v) -> Syn v a -> Syn v a
 reify = undefined
 
--- | Left biased.
 orr :: Monoid v => [Syn v a] -> Syn v a
-orr [a] = a
-orr [a, b] = Syn $ liftF (Or a b id)
-orr (a:as) = orr [a, orr as]
-
-orr' :: Monoid v => Syn v a -> Syn v a -> Syn v a
-orr' a b = Syn $ liftF (Or a b id)
+orr as = Syn $ liftF (Or as id)
 
 andd' :: [Syn v a] -> Syn v [a]
 andd' [a] = (:[]) <$> a
@@ -259,11 +267,13 @@ unblock m rsp@(Syn (Free (And p q next)))
     (q', uq) = unblock m q
 
 -- or
-unblock m rsp@(Syn (Free (Or p q next)))
-  = (Syn (Free (Or p' q' next)), up || uq)
+unblock m rsp@(Syn (Free (Or ps next)))
+  = (Syn (Free (Or ps' next)), ups)
   where
-    (p', up) = unblock m p
-    (q', uq) = unblock m q
+    -- [(p', up)] = map (unblock m) ps
+    r = map (unblock m) ps
+    ps' = map fst r
+    ups = foldl1 (||) (map snd r)
 
 unblockIO
   :: M.Map EventId EventValue
@@ -317,14 +327,15 @@ unblockIO m rsp@(Syn (Free (And p q next))) = do
   pure (Syn (Free (And p' q' next)), up || uq)
 
 -- or
-unblockIO m rsp@(Syn (Free (Or p q next))) = do
-  (p', up) <- unblockIO m p
-  (q', uq) <- unblockIO m q
-  pure (Syn (Free (Or p' q' next)), up || uq)
+unblockIO m rsp@(Syn (Free (Or ps next))) = do
+  r <- sequence $ map (unblockIO m) ps
+  let ps' = map fst r
+      ups = foldl1 (||) (map snd r)
+  pure (Syn (Free (Or ps' next)), ups)
 
 -- advance ---------------------------------------------------------------------
 
-data V v = E | V v | P (V v) (V v) | forall u. Monoid u => U (u -> v) (V u)
+data V v = E | V v | P [V v] | forall u. Monoid u => U (u -> v) (V u) 
 
 deriving instance Functor V
 
@@ -404,6 +415,9 @@ advance nid eid ios (Syn (Free (Async io next))) v
 
 -- stepIO:  what happen to io in advance? it seems advance only used in dbg.
 advance nid eid ios rsp@(Syn (Free (StepIO io next))) v
+  = undefined 
+
+advance nid eid ios rsp@(Syn (Free (StepBlock io next))) v
   = undefined 
 
 -- and
@@ -541,10 +555,17 @@ advanceIO nid eid ios rsp@(Syn (Free (Emit (EventValue (Event _ e) _) _))) v
 advanceIO nid eid ios (Syn (Free (Async io next))) v
   = advanceIO nid eid (io:ios) (Syn next) v
 
--- stepIO
+-- io
 advanceIO nid eid ios rsp@(Syn (Free (StepIO io next))) v = do
   a <- io
   pure (eid, ios, Syn (next a), \_ -> DbgDone, v)
+
+-- effect 
+advanceIO nid eid ios rsp@(Syn (Free (StepBlock io next))) v = do
+  a <- io
+  pure (eid, ios, Syn (next a), \_ -> DbgDone, v)
+
+
 
 -- and
 advanceIO nid eid ios rsp@(Syn (Free (And p q next))) v = do
@@ -567,17 +588,30 @@ advanceIO nid eid ios rsp@(Syn (Free (And p q next))) v = do
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next (a, b))) (V (foldV pv' <> foldV qv'))
     _ -> pure (eid'', ios'', Syn (Free (And p' q' next)), dbgcomp, v')
 
-advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
-  let (pv, qv) = case v of
-        P pv qv -> (pv, qv)
-        _ -> (E, E)
+advanceIO nid eid ios rsp@(Syn (Free (Or ps next))) v = do
+  let zipPV ps v = case v of
+        P pvs -> zip ps pvs
+        _ -> zip ps (repeat E)
+-
+      pvTup = zipPV ps v
 
-  (eid', ios', p', pdbg', pv') <- advanceIO nid eid ios p pv
-  (eid'', ios'', q', qdbg', qv') <- advanceIO nid eid' ios' q qv
+  -- [(eid', ios', p', pdbg', pv')]
+  tuples <- sequence $ scanl (\(eid', ios', p', pdbg', pv') (q,qv) -> uncurry (advanceIO nid eid' ios') (q,qv)) 
+                             (uncurry (advanceIO nid eid ios) (init pvTup)) 
+                             (tail pvTup) 
+--  let (pv, qv) = case v of
+--        P pv qv -> (pv, qv)
+--        _ -> (E, E)
 
-  let dbgcomp (DbgBin op pd qd nd) = DbgBin op (pdbg' . pd) (qdbg' . qd) nd
-      dbgcomp (DbgJoin p) = DbgJoin (DbgBin DbgOr pdbg' qdbg' p)
-      dbgcomp p = DbgBin DbgOr pdbg' qdbg' p
+--  (eid', ios', p', pdbg', pv') <- advanceIO nid eid ios p pv
+--  (eid'', ios'', q', qdbg', qv') <- advanceIO nid eid' ios' q qv
+
+--  let dbgcomp (DbgBin op pd qd nd) = DbgBin op (pdbg' . pd) (qdbg' . qd) nd
+--      dbgcomp (DbgJoin p) = DbgJoin (DbgBin DbgOr pdbg' qdbg' p)
+--      dbgcomp p = DbgBin DbgOr pdbg' qdbg' p
+
+  let dbgcomp p = undefined 
+
 
       v' = case (pv', qv') of
         (E, E) -> v
@@ -591,7 +625,6 @@ advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
     _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
 
 -- gather ----------------------------------------------------------------------
-
 -- TODO: MonoidMap
 concatEventValues :: EventValue -> EventValue -> EventValue
 concatEventValues (EventValue e@(Event conc _) a) (EventValue _ b) = EventValue e (a `conc` unsafeCoerce b)
