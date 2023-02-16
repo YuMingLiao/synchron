@@ -24,6 +24,7 @@ import Data.Type.Equality
 import Type.Reflection
 
 import Data.IORef
+import           Control.Concurrent.STM   (STM, TMVar, newEmptyTMVarIO, atomically, putTMVar, takeTMVar)
 import Data.List (intercalate)
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.Map as M
@@ -592,7 +593,7 @@ advanceIO nid eid ios rsp@(Syn (Free (Or ps next))) v = do
   let zipPV ps v = case v of
         P pvs -> zip ps pvs
         _ -> zip ps (repeat E)
--
+
       pvTup = zipPV ps v
 
   -- [(eid', ios', p', pdbg', pv')]
@@ -658,7 +659,7 @@ gather (Syn (Free (Dyn _ p ps _))) = M.unionWith concatEventValues (gather p) (M
 gather (Syn (Free (And p q next))) = M.unionWith concatEventValues (gather q) (gather p)
 
 -- or
-gather (Syn (Free (Or p q next))) = M.unionWith concatEventValues (gather q) (gather p)
+gather (Syn (Free (Or ps next))) = M.unionsWith concatEventValues (map gather ps)
 
 gatherIO
   :: Syn v a
