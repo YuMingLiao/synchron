@@ -73,6 +73,7 @@ done :: Concur a -> Maybe a
 done (Concur (Pure a)) = Just a
 done _ = Nothing
 
+-- atomically is only for STM, not IO.
 runConcur :: Concur a -> IO a
 runConcur s = do
   s' <- atomically $ runStep s
@@ -87,14 +88,14 @@ newtype Pool s = Pool (TChan (Concur ()))
 withPool :: (forall s. Pool s -> Concur a) -> Concur a
 withPool k = do
   ch <- step newTChan
-  go ch [ (Right . Left) <$> k (Pool ch) ]
+  go ch [ (Right . Left) <$> k (Pool ch) ] -- Concur (Right (Left a))
   where
     go ch trails = do
       (a, ks) <- orr' trails
       case a of
         Left trail -> go ch $ concat
-          [ [ Left <$> step (readTChan ch) ]
-          , [ (Right . Right) <$> trail ]
+          [ [ Left <$> step (readTChan ch) ]  -- Concur (Left trail) from spawn
+          , [ (Right . Right) <$> trail ] -- Concur (Right (Right a)) continued one
           , ks
           ]
         Right (Left a)  -> pure a

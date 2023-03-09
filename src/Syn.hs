@@ -24,6 +24,7 @@ import Data.Type.Equality
 import Type.Reflection
 
 import Data.IORef
+import           Control.Concurrent       (ThreadId, forkIO, killThread, newEmptyMVar, putMVar, takeMVar)
 import           Control.Concurrent.STM   (STM, TMVar, newEmptyTMVarIO, atomically, putTMVar, takeTMVar)
 import Data.List (intercalate)
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe, mapMaybe)
@@ -186,6 +187,7 @@ orr :: Monoid v => [Syn v a] -> Syn v a
 orr [a] = a
 orr [a, b] = Syn $ liftF (Or a b id)
 orr (a:as) = orr [a, orr as]
+
 
 orr' :: Monoid v => Syn v a -> Syn v a -> Syn v a
 orr' a b = Syn $ liftF (Or a b id)
@@ -591,7 +593,6 @@ advanceIO nid eid ios rsp@(Syn (Free (And p q next))) v = do
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next (a, b))) (V (foldV pv' <> foldV qv'))
     _ -> pure (eid'', ios'', Syn (Free (And p' q' next)), dbgcomp, v')
 
--- advanceIO for Orr with IO: single fast path / multiple paths. Like concur-core, cancel rest and return if one reach Pure. or all reach to block points.
 advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
   let (pv, qv) = case v of
         P pv qv -> (pv, qv)
@@ -614,6 +615,50 @@ advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
     (_, Syn (Pure b))
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv'))
     _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
+
+  where 
+    orr_ :: IO (Res, Res)
+    orr_ = 
+      mvar <- io newEmptyTMVarIO
+      comb mvar [Left p, Left q]
+    comb :: TMVar (Int, Syn v a)
+         -> [Either (Syn v a) (v, Maybe ThreadId)] -> IO (Res, Res)
+    comb mvar widgets = do
+      advanced <- forM widgets $ \w -> case w of
+                                                --  advanceIO is removed from here because there is no non-blocking IO to execute.
+                                                -- Left (executed Syn)
+                                                -- Right . Left (unexecuted Syn)
+                                                -- Right . Right (displaying)
+        Left rsp@(Syn (Pure a))          -> pure $ Left <$> advanceIO rsp
+        Left rsp@(Syn (StepIO io next))  -> pure $ Left (Syn (Pure a))
+        Left suspended         -> pure $ (Right . Left) <$> advanceIO suspended
+        Right (displayed, tid) -> pure $ Right $ Right (displayed, tid)
+
+      case sequence advanced of
+        [Left (eid', ios', p', pdbg', pv'), Left (eid'', ios'', q', qdbg', qv')] -> do
+          case (p', q') of
+            (Syn (Pure a), _)
+              -> do
+                   sequence_ [ killThread tid | Right (Right (_, Just tid)) <- advanced ]
+                   mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid' ios' (Syn (next a)) (V (foldV pv' <> foldV qv'))
+            (_, Syn (Pure b))
+              -> do
+                   sequence_ [ killThread tid | Right (Right (_, Just tid)) <- advanced ]
+                   mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv'))
+            _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
+        _ -> 
+          case rights advanced of
+
+
+
+
+  -- gather and unblock in stepOnce let orr unable to comb alone. 
+  -- so maybe comb should be written in advanceIO?
+  -- Well, no matter if `advanceIO Or` gets temporary results or one Pure, gather and unblock must execute. so running thread will finish or be canceled in `advanceIO Or`.
+  -- so comb should be in `advanceIO Or`
+
+type Res = (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
+-- data Status = Instant (Syn v a) | TimeConsuming (Syn v a) | Forking (v, Maybe ThreadId)
 
 -- gather ----------------------------------------------------------------------
 -- TODO: MonoidMap
