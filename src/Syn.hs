@@ -615,7 +615,7 @@ advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
     (_, Syn (Pure b))
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv'))
     _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
-
+{-
   where 
     orr_ :: IO (Res, Res)
     orr_ = 
@@ -659,7 +659,7 @@ advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
 
 type Res = (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
 -- data Status = Instant (Syn v a) | TimeConsuming (Syn v a) | Forking (v, Maybe ThreadId)
-
+-}
 -- gather ----------------------------------------------------------------------
 -- TODO: MonoidMap
 concatEventValues :: EventValue -> EventValue -> EventValue
