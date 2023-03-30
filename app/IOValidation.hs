@@ -308,18 +308,24 @@ todo v t = loop v (go t)
 ttext t = do
   span [ onDoubleClick ] [ text t ]
   inputOnEnter "" t
-
-inputName = var "test" $ \v -> pool $ \p -> do
-  spawn p (inputName' v) --spawn is a bit like nailing a varying painting on the wall. It decides sequence I guess. Or is it just about event pool?
+-- I guess putVar should never show in `\s -> ...`. Kind of violate something.
+-- So I shouldn't use v to set up an initial value that can be changed by user later.
+-- the putVar widget and showing widget needs to be separated.
+-- so putVar should be in Syn. showing widget should be in loop stream.
+-- a bit like parent widget keep control of shared state in Flutter.
+--
+-- Okay, so if I don't use spawn, it means squential showing widgets, one after another.
+inputName = var "" $ \v -> pool $ \p -> do
+  spawn p (inputName' v "") --spawn is a bit like nailing a varying painting on the wall. It decides sequence I guess. Or is it just about event pool?
   spawn p (reactText v)
   Syn.forever -- or Syn will end instantly. If there is a Syn here, the whole Syn will end with its branching logic.
   where
-    inputName' v = loop v go
-      where go = stream $ \s -> do
+    inputName' v s = go s
+      where 
+            go s = do
               typing <- inputOnEnter "請輸入姓名" s
-              putVar v typing -- it seems putVar should not be put in stream, anyway inputOnEnter are not updated by Var.
-              pure . Right $ go -- so loop Stream, not Syn. and end with pure (Left value).
-              -- Q: Why is input empty after enter?
+              putVar v typing
+              go typing 
     reactText v = loop v $ stream $ \s -> do
       text (T.pack $ show s)
 
