@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds #-}
 
-module Main where
 
 import Control.Applicative
 import Control.Concurrent
@@ -46,6 +46,10 @@ import Debug.Trace
 import System.IO.Unsafe
 import Concur (runConcur, withPool, step)
 import Control.Monad.IO.Class
+import GHC.Generics
+import Data.Generic.HKD
+import Data.Text (Text)
+import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
 
 counter x = do
   div [ onClick ] [ text (T.pack $ show x) ]
@@ -104,21 +108,43 @@ ttext t = do
 --  So no vertical for spawns.
 --  But in todos, spawn div then vertical.
 vert xs = div [] (map (\x -> div [] [x]) xs)
-signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> pool $ \p -> do
-  spawn p (div [] [inputName name])
+
+data SignUpForm = SignUpForm {
+  username :: Text,
+  password :: Text,
+  confirmPassword :: Text
+} deriving Generic
+
+defaultSignUp = SignUpForm "" "" ""
+
+type Validation a = HKD a (Const Bool)
+
+instance Semigroup Bool where
+  (<>) = (&&)
+
+instance Monoid Bool where
+  mempty = False
+
+
+signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct defaultSignUp :: Validation SignUpForm) $ \bools -> pool $ \p -> do
+  spawn p (div [] [inputName name bools])
   spawn p (div [] [validateName name])
   spawn p (div [] [inputPwd pwd])
   spawn p (div [] [validatePwd pwd])
   spawn p (div [] [inputCfm cfm])
   spawn p (div [] [validateCfm pwd cfm])
+  spawn p (div [] [(loop bools $ stream $ \s -> text (T.pack $ show s))])
   -- vert [spawn p (validateName name), spawn p (inputName name)]
   Syn.forever
   where
-    inputName v = go mempty
+    inputName v v1 = go mempty
       where 
             go s = do
               s <- inputOnInput "請輸入姓名" s
               putVar v s
+              (bools :: Validation SignUpForm) <- readVar v1
+              let bools' = bools & field @"username" .~ Const True
+              putVar v1 bools
               go s 
     validateName v = loop v $ stream $ \s -> do
       text (T.pack $ show s)
