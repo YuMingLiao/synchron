@@ -127,8 +127,8 @@ instance Monoid Bool where
 
 
 signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct defaultSignUp :: Validation SignUpForm) $ \bools -> pool $ \p -> do
-  spawn p (div [] [inputName name bools])
-  spawn p (div [] [validateName name])
+  spawn p (div [] [inputName name])
+  spawn p (div [] [validateName name bools])
   spawn p (div [] [inputPwd pwd])
   spawn p (div [] [validatePwd pwd])
   spawn p (div [] [inputCfm cfm])
@@ -137,16 +137,15 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
   -- vert [spawn p (validateName name), spawn p (inputName name)]
   Syn.forever
   where
-    inputName v v1 = go mempty
+    inputName v = go mempty
       where 
             go s = do
               s <- inputOnInput "請輸入姓名" s
               putVar v s
-              (bools :: Validation SignUpForm) <- readVar v1
-              let bools' = bools & field @"username" .~ Const True
-              putVar v1 bools
               go s 
-    validateName v = loop v $ stream $ \s -> do
+    validateName v v1 = loop v $ stream $ \s -> do
+      (bools :: Validation SignUpForm) <- readVar v1
+      putVar v1 (bools & field @"username" .~ Const True)
       text (T.pack $ show s)
     inputPwd v = go mempty
       where go s = do
@@ -157,7 +156,7 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
       text (T.pack $ show s)
     inputCfm v = go mempty
       where go s = do
-              s <- inputPassword "請輸入密碼" s 
+              s <- inputPassword "請確認密碼" s 
               putVar v s
               go s
     validateCfm vPwd vCfm = loop vPwd $ stream $ \sPwd -> loop vCfm $ stream $ \sCfm -> do
