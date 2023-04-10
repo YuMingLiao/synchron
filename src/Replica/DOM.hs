@@ -44,12 +44,15 @@ logAction = LogAction $ \(x,y) -> liftIO $ TIO.putStrLn $ format (x,y)
 
 minute n = Ch.Timespan (n * 1000000000 * 60)
 
+compose2 :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+compose2 g f x y = g (f x y)
+
 runReplica :: Syn Replica.DOM.HTML () -> IO ()
 runReplica p = do
   let nid = NodeId 0
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
-  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO <$> \() -> do
+  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     traceIO "in Syn's cfgStep"
     takeMVar block
     modifyMVar ctx $ \ctx' -> case ctx' of

@@ -126,14 +126,14 @@ instance Monoid Bool where
   mempty = False
 
 
-signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct defaultSignUp :: Validation SignUpForm) $ \bools -> pool $ \p -> do
+signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct defaultSignUp :: Validation SignUpForm) $ \valid -> pool $ \p -> do
   spawn p (div [] [inputName name])
-  spawn p (div [] [validateName name bools])
+  spawn p (div [] [validateName name valid])
   spawn p (div [] [inputPwd pwd])
-  spawn p (div [] [validatePwd pwd])
+  spawn p (div [] [validatePwd pwd valid])
   spawn p (div [] [inputCfm cfm])
-  spawn p (div [] [validateCfm pwd cfm])
-  spawn p (div [] [(loop bools $ stream $ \s -> text (T.pack $ show s))])
+  spawn p (div [] [validateCfm pwd cfm valid])
+  spawn p (div [] [(loop valid $ stream $ \s -> text (T.pack $ show s))])
   -- vert [spawn p (validateName name), spawn p (inputName name)]
   Syn.forever
   where
@@ -152,14 +152,21 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
               s <- inputPassword "請輸入密碼" s 
               putVar v s
               go s
-    validatePwd v = loop v $ stream $ \s -> do
+    validatePwd v valid = loop v $ stream $ \s -> do
+      (bools :: Validation SignUpForm) <- readVar valid
+      putVar valid (bools & field @"password" .~ Const True)
       text (T.pack $ show s)
     inputCfm v = go mempty
       where go s = do
               s <- inputPassword "請確認密碼" s 
               putVar v s
               go s
-    validateCfm vPwd vCfm = loop vPwd $ stream $ \sPwd -> loop vCfm $ stream $ \sCfm -> do
-      text (T.pack $ show (sPwd == sCfm))
+    validateCfm vPwd vCfm valid = loop vPwd $ stream $ \sPwd -> loop vCfm $ stream $ \sCfm -> do
+      (bools :: Validation SignUpForm) <- readVar valid
+      let res = sPwd == sCfm
+      putVar valid (bools & field @"confirmPassword" .~ Const res)
+      text (T.pack $ show res)
+    submitButton valid = loop valid $ stream # \sValid -> do
+      button (if allTrue sValid then [onClick] else []) [ text "Submit" ]
  
 main = runReplica signUp 

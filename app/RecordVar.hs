@@ -22,7 +22,7 @@ instance Typeable a => Show (Var a) where
   show _ = "Var " ++ show (typeOf (undefined ::a))
 
 -- I intend to use a record initial value to create a record full of vars. But I don't know how to chain local' and get eventName. Should I put them into the same pool? According to syntax, I don't have to. But how could I get a Rank2-like argument into a Var e and assign it to a field?
-
+-- ideas: Locals, then map record, then sequence in recordVar
 collectEs :: Semigroup a => Syn () [Event Internal a]
 collectEs = local' (<>) $ \e1 -> local' (<>) $ \e2 -> pure [e1,e2] 
 {-
