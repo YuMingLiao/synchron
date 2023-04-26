@@ -70,12 +70,12 @@ color :: Int -> String -> String
 color c s = "\ESC[" <> show (31 + (c `mod` 7)) <> "m" <> s <> "\ESC[m"
 
 evColor :: EventId -> String -> String
-evColor (Internal (_, c)) = color c
-evColor (External (_, c)) = color c
+evColor (Internal (_, c)) = color (last c)
+evColor (External (_, c)) = color (last c)
 
 evColor' :: EventId -> Int
-evColor' (Internal (_, c)) = c
-evColor' (External (_, c)) = c
+evColor' (Internal (_, c)) = (last c)
+evColor' (External (_, c)) = (last c)
 
 type W = Int
 type H = Int
@@ -252,7 +252,7 @@ zipLines ([a]:as) (b:bs) = (Nothing, Just b):zipLines ([a]:as) bs
 zipLines (a:as) ([b]:bs) = (Just a, Nothing):zipLines as ([b]:bs)
 
 toDbgSyn :: Monoid v => Syn v a -> (DbgSyn -> DbgSyn)
-toDbgSyn = go mempty 0 id
+toDbgSyn = go mempty [0] id
   where
     go m eid dbg p = if M.size m' == 0
       then dbg . dbg'
@@ -261,7 +261,7 @@ toDbgSyn = go mempty 0 id
         (eid', p', dbg', _, m', ios, u) = Syn.stepOnce' m 0 eid p Syn.E
 
 toGSyn :: Monoid v => Syn v a -> [GSyn]
-toGSyn = go mempty 0 []
+toGSyn = go mempty [0] []
   where
     convert :: Syn v a -> GSyn
     convert (Syn (Pure _)) = GDone

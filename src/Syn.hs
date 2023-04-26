@@ -40,7 +40,15 @@ import Debug.Trace
 newtype NodeId = NodeId Int deriving (Eq, Ord, Num, Show)
 
 -- TODO: internal NodeId as well
-data EventId = Internal (NodeId, Int) | External (NodeId, Int)
+-- [eid, pid, eid] p as path
+type EventCounter = [Int]
+
+addOne :: [Int] -> [Int]
+addOne [] = error "impossible"
+addOne (x:[]) = (x + 1):[]
+addOne (x:xs) = x : addOne xs
+
+data EventId = Internal (NodeId, EventCounter) | External (NodeId, EventCounter)
   deriving (Eq, Ord, Show)
 
 data Internal
@@ -70,8 +78,6 @@ data SynF v next
 
   | forall a. StepBlock (IO a) (a -> next) 
 
-  | forall a. StepSTM (STM a) (a -> next) 
-
   | Forever
 
   | View v next
@@ -89,7 +95,7 @@ data SynF v next
 
   | forall a b. Dyn (Event Internal [Syn v ()]) (Syn v b) [(Syn v (), V v)] (b -> next)
 
-  | forall a. Or (Syn v a) (Syn v a) (a -> next)
+  | forall a. Or [Syn v a] (a -> next)
 
   | forall a b. And (Syn v a) (Syn v b) ((a, b) -> next)
 
@@ -109,8 +115,8 @@ color :: Int -> String -> String
 color c s = "\ESC[" <> show (31 + (c `mod` 7)) <> "m" <> s <> "\ESC[m"
 
 evColor :: EventId -> String -> String
-evColor (Internal (_, c)) = color c
-evColor (External (_, c)) = color c
+evColor (Internal (_, c)) = color (last c)
+evColor (External (_, c)) = color (last c)
 
 instance Show (Syn v a) where
   show (Syn (Pure a)) = "◆"
@@ -124,8 +130,10 @@ instance Show (Syn v a) where
   show (Syn (Free (Local _ _ _))) = "local"
   show (Syn (Free (Emit (EventValue (Event _ e) _) _))) = evColor e "▲"
   show (Syn (Free (Await (Event _ e) _))) = evColor e "○"
-  show (Syn (Free (Or a b _))) = "∨ [" <> intercalate ", " (map show [a, b]) <> "]"
+  show (Syn (Free (Or ps _))) = "∨ [" <> intercalate ", " (map show ps) <> "]"
   show (Syn (Free (And a b _))) = "∧ [" <> show a <> ", " <> show b <> "]"
+  show (Syn (Free (StepIO _ _))) = "<non-blocking io>"
+  show (Syn (Free (StepBlock _ _))) = "<blocking io>"
 
 data DbgBinOp = DbgAnd | DbgOr deriving (Eq, Show)
 
@@ -153,9 +161,10 @@ io a = Syn $ liftF (StepIO a id)
 effect :: IO a -> Syn v a
 effect a = Syn $ liftF (StepBlock a id)
 
+{-
 liftSTM :: STM a -> Syn v a
 liftSTM a = Syn $ liftF (StepSTM a id)
-
+-}
 
 
 
@@ -184,6 +193,8 @@ reify :: Event Internal (Syn v a, v) -> Syn v a -> Syn v a
 reify = undefined
 
 orr :: Monoid v => [Syn v a] -> Syn v a
+orr as = Syn $ liftF (Or as id)
+{-
 orr [a] = a
 orr [a, b] = Syn $ liftF (Or a b id)
 orr (a:as) = orr [a, orr as]
@@ -191,7 +202,7 @@ orr (a:as) = orr [a, orr as]
 
 orr' :: Monoid v => Syn v a -> Syn v a -> Syn v a
 orr' a b = Syn $ liftF (Or a b id)
-
+-}
 andd' :: [Syn v a] -> Syn v [a]
 andd' [a] = (:[]) <$> a
 andd' [a, b] = do
@@ -275,17 +286,19 @@ unblock m rsp@(Syn (Free (And p q next)))
     (q', uq) = unblock m q
 
 -- or
+{-
 unblock m rsp@(Syn (Free (Or p q next)))
   = (Syn (Free (Or p' q' next)), up || uq)
   where
     (p', up) = unblock m p
     (q', uq) = unblock m q
-
+-}
 unblockIO
   :: M.Map EventId EventValue
   -> Syn v a
   -> IO (Syn v a, Bool)
 
+unblockIO _ rsp | trace ("unblockIO:" ++ show rsp) False = undefined
 -- remote
 unblockIO m rsp@(Syn (Free (RemoteU trail next))) = do
   u <- trUnblock trail m
@@ -294,8 +307,16 @@ unblockIO m rsp@(Syn (Free (RemoteU trail next))) = do
 -- pure
 unblockIO _ rsp@(Syn (Pure a)) = pure (rsp, False)
 
+-- view
+unblockIO _ rsp@(Syn (Free (View _ _))) = pure (rsp, False)
+
 -- local
 unblockIO _ rsp@(Syn (Free (Local _ _ _))) = pure (rsp, False)
+
+-- non-blocking io
+unblockIO _ rsp@(Syn (Free (StepIO _ _))) = pure (rsp, False)
+-- blocking io
+unblockIO _ rsp@(Syn (Free (StepBlock _ _))) = pure (rsp, False)
 
 -- mapView
 unblockIO m rsp@(Syn (Free (MapView f v next))) = do
@@ -333,14 +354,20 @@ unblockIO m rsp@(Syn (Free (And p q next))) = do
   pure (Syn (Free (And p' q' next)), up || uq)
 
 -- or
+{-
 unblockIO m rsp@(Syn (Free (Or p q next))) = do
   (p', up) <- unblockIO m p
   (q', uq) <- unblockIO m q
   pure (Syn (Free (Or p' q' next)), up || uq)
+-}
+unblockIO m rsp@(Syn (Free (Or ps next))) = do
+  (p's, up's) <- unzip <$> mapM (unblockIO m) ps
+  pure (Syn (Free (Or p's next)), or up's)
+
 
 -- advance ---------------------------------------------------------------------
 
-data V v = E | V v | P (V v) (V v) | forall u. Monoid u => U (u -> v) (V u) 
+data V v = E | V v | P (V v) (V v) | forall u. Monoid u => U (u -> v) (V u) | POr [V v] 
 
 deriving instance Functor V
 
@@ -349,16 +376,18 @@ foldV E = mempty
 foldV (V v) = v
 foldV (U f v) = f (foldV v)
 foldV (P p q) = foldV p <> foldV q
+foldV (POr ps) = mconcat (map foldV ps)
+
 
 -- advance . advance == advance
 advance
   :: Monoid v
   => NodeId
-  -> Int
+  -> EventCounter 
   -> [IO ()]
   -> Syn v a
   -> V v
-  -> (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
+  -> (EventCounter, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
 
 -- pure
 advance nid eid ios rsp@(Syn (Pure a)) v
@@ -388,7 +417,7 @@ advance nid eid ios rsp@(Syn (Free (MapView f m next))) v
 
 -- local
 advance nid eid ios (Syn (Free (Local conc f next))) v
-  = advance nid (eid + 1) ios (f (Event conc (Internal (nid, eid))) >>= Syn . next) v
+  = advance nid (addOne eid) ios (f (Event conc (Internal (nid, eid))) >>= Syn . next) v
 
 -- dyn
 advance nid eid ios (Syn (Free (Dyn e p ps next))) v
@@ -420,10 +449,10 @@ advance nid eid ios (Syn (Free (Async io next))) v
 
 -- stepIO:  what happen to io in advance? it seems advance only used in dbg.
 advance nid eid ios rsp@(Syn (Free (StepIO io next))) v
-  = undefined 
+  = error "advance StepIO undefined"
 
 advance nid eid ios rsp@(Syn (Free (StepBlock io next))) v
-  = undefined 
+  = error "advance StepBlock undefined"
 
 -- and
 advance nid eid ios rsp@(Syn (Free (And p q next))) v
@@ -445,7 +474,7 @@ advance nid eid ios rsp@(Syn (Free (And p q next))) v
 
     (eid', ios', p', pdbg', pv') = advance nid eid ios p pv
     (eid'', ios'', q', qdbg', qv') = advance nid eid' ios' q qv
-
+{-
 advance nid eid ios rsp@(Syn (Free (Or p q next))) v
   = case (p', q') of
       (Syn (Pure a), _)
@@ -468,23 +497,25 @@ advance nid eid ios rsp@(Syn (Free (Or p q next))) v
 
     (eid', ios', p', pdbg', pv') = advance nid eid ios p pv
     (eid'', ios'', q', qdbg', qv') = advance nid eid' ios' q qv
-
+-}
 advance nid eid ios p v = error (show p)
 
 mapDbg
   :: ((DbgSyn -> DbgSyn) -> DbgSyn -> DbgSyn)
-  -> (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
-  -> (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
+  -> (a, b, c, DbgSyn -> DbgSyn, d)
+  -> (a, b, c, DbgSyn -> DbgSyn, d)
+--   -> (EventCounter, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
+--   -> (EventCounter, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
 mapDbg f (eid, ios, p, dbg, v) = (eid, ios, p, f dbg, v)
 
 advanceIO
   :: Monoid v
   => NodeId
-  -> Int
+  -> EventCounter
   -> [IO ()]
   -> Syn v a
   -> V v
-  -> IO (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
+  -> IO (EventCounter, [IO ()], Either (IO (Syn v a)) (Syn v a), DbgSyn -> DbgSyn, V v)
 
 -- remote
 advanceIO nid eid ios (Syn (Free (Remote make next))) v = do
@@ -496,19 +527,19 @@ advanceIO nid eid ios rsp@(Syn (Free (RemoteU trail next))) _ = do
   r <- trAdvance trail
   case r of
     (Just a, v') -> advanceIO nid eid ios (Syn $ next a) v'
-    (Nothing, v') -> pure (eid, ios, rsp, id, v')
+    (Nothing, v') -> pure (eid, ios, (Right rsp), id, v')
 
 -- pure
 advanceIO nid eid ios rsp@(Syn (Pure a)) v
-  = pure (eid, ios, rsp, \_ -> DbgDone, v)
+  = pure (eid, ios, (Right rsp), \_ -> DbgDone, v)
 
 -- forever
 advanceIO nid eid ios rsp@(Syn (Free Forever)) v
-  = pure (eid, ios, rsp, \_ -> DbgForever, v)
+  = pure (eid, ios, Right rsp, \_ -> DbgForever, v)
 
 -- await
 advanceIO nid eid ios rsp@(Syn (Free (Await (Event _ e) _))) v
-  = pure (eid, ios, rsp, \dnext -> DbgAwait e dnext, v)
+  = pure (eid, ios, (Right rsp), \dnext -> DbgAwait e dnext, v)
 
 -- view
 advanceIO nid eid ios rsp@(Syn (Free (View v next))) _
@@ -519,15 +550,16 @@ advanceIO nid eid ios rsp@(Syn (Free (MapView f m next))) v = do
   (eid', ios', rsp', dbg', v') <- case v of
     U uf uv -> advanceIO nid eid ios m (unsafeCoerce uv)
     _ -> advanceIO nid eid ios m E
+  rsp' <- either id pure rsp' 
 
   case rsp' of
     Syn (Pure a) -> advanceIO nid eid' ios' (Syn $ next a) (V $ f (foldV v'))
-    rsp' -> pure (eid', ios', Syn (Free (MapView f rsp' next)), dbg', U f v')
+    rsp' -> pure (eid', ios', Right (Syn (Free (MapView f rsp' next))), dbg', U f v')
   where
 
 -- local
 advanceIO nid eid ios (Syn (Free (Local conc f next))) v
-  = advanceIO nid (eid + 1) ios (f (Event conc (Internal (nid, eid))) >>= Syn . next) v
+  = advanceIO nid (addOne eid) ios (f (Event conc (Internal (nid, eid))) >>= Syn . next) v
 
 -- dyn
 advanceIO nid eid ios (Syn (Free (Dyn e p ps next))) v = do
@@ -536,13 +568,15 @@ advanceIO nid eid ios (Syn (Free (Dyn e p ps next))) v = do
         P pv _ -> pv
   
   (eid', ios', p', dbg', v') <- advanceIO nid eid ios p pv
+  p' <- either id pure p' 
 
   let go rps eid ios [] = pure (eid, ios, map fst (reverse rps), \_ -> DbgDone, P v' (V $ foldMap foldV (map (snd . fst) (reverse rps))))
       go rps eid ios ((p, v):ps) = do
-        r <- advanceIO nid eid ios p v
-        case r of
-          (eid', ios', Syn (Pure a), dbg', v') -> go rps eid' ios' ps
-          (eid', ios', p', dbg', v') -> go (((p', v'), dbg'):rps) eid' ios' ps
+        (eid', ios', p', dbg', v') <- advanceIO nid eid ios p v
+        p' <- either id pure p' 
+        case p' of
+          Syn (Pure a) -> go rps eid' ios' ps
+          p' -> go (((p', v'), dbg'):rps) eid' ios' ps
 
   (eid'', ios'', ps', dbg'', v'') <- go [] eid' ios' ps
 
@@ -550,11 +584,11 @@ advanceIO nid eid ios (Syn (Free (Dyn e p ps next))) v = do
     Syn (Pure a) -> advanceIO nid eid' ios' (Syn (next a)) $ case v' of
       P pv _ -> pv
       v' -> v'
-    otherwise -> pure (eid'', ios'', Syn (Free (Dyn e p' ps' next)), \_ -> DbgDone, v'') -- TODO: DbgDone
+    otherwise -> pure (eid'', ios'', Right (Syn (Free (Dyn e p' ps' next))), \_ -> DbgDone, v'') -- TODO: DbgDone
 
 -- emit
 advanceIO nid eid ios rsp@(Syn (Free (Emit (EventValue (Event _ e) _) _))) v
-  = pure (eid, ios, rsp, \dbg -> DbgEmit e dbg, v)
+  = pure (eid, ios, Right rsp, \dbg -> DbgEmit e dbg, v)
 
 -- async
 advanceIO nid eid ios (Syn (Free (Async io next))) v
@@ -563,12 +597,11 @@ advanceIO nid eid ios (Syn (Free (Async io next))) v
 -- io
 advanceIO nid eid ios rsp@(Syn (Free (StepIO io next))) v = do
   a <- io
-  pure (eid, ios, Syn (next a), \_ -> DbgDone, v)
+  advanceIO nid eid ios (Syn (next a)) v
 
 -- effect 
 advanceIO nid eid ios rsp@(Syn (Free (StepBlock io next))) v = do
-  a <- io
-  pure (eid, ios, Syn (next a), \_ -> DbgDone, v)
+  pure (eid, ios, Left (io >>= pure . Syn . next), \_ -> DbgDone, v)
 
 
 
@@ -579,7 +612,9 @@ advanceIO nid eid ios rsp@(Syn (Free (And p q next))) v = do
         _ -> (E, E)
 
   (eid', ios', p', pdbg', pv') <- advanceIO nid eid ios p pv
+  p'' <- either id pure p' 
   (eid'', ios'', q', qdbg', qv') <- advanceIO nid eid' ios' q qv
+  q'' <- either id pure q' 
 
   let dbgcomp (DbgBin op pd qd nd) = DbgBin op (pdbg' . pd) (qdbg' . qd) nd
       dbgcomp p = DbgBin DbgAnd pdbg' qdbg' p
@@ -588,11 +623,11 @@ advanceIO nid eid ios rsp@(Syn (Free (And p q next))) v = do
         (E, E) -> v
         _ -> P pv' qv'
 
-  case (p', q') of
+  case (p'', q'') of
     (Syn (Pure a), Syn (Pure b))
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next (a, b))) (V (foldV pv' <> foldV qv'))
-    _ -> pure (eid'', ios'', Syn (Free (And p' q' next)), dbgcomp, v')
-
+    _ -> pure (eid'', ios'', Right (Syn (Free (And p'' q'' next))), dbgcomp, v')
+{-
 advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
   let (pv, qv) = case v of
         P pv qv -> (pv, qv)
@@ -615,50 +650,39 @@ advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
     (_, Syn (Pure b))
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv'))
     _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
-{-
-  where 
-    orr_ :: IO (Res, Res)
-    orr_ = 
-      mvar <- io newEmptyTMVarIO
-      comb mvar [Left p, Left q]
-    comb :: TMVar (Int, Syn v a)
-         -> [Either (Syn v a) (v, Maybe ThreadId)] -> IO (Res, Res)
-    comb mvar widgets = do
-      advanced <- forM widgets $ \w -> case w of
-                                                --  advanceIO is removed from here because there is no non-blocking IO to execute.
-                                                -- Left (executed Syn)
-                                                -- Right . Left (unexecuted Syn)
-                                                -- Right . Right (displaying)
-        Left rsp@(Syn (Pure a))          -> pure $ Left <$> advanceIO rsp
-        Left rsp@(Syn (StepIO io next))  -> pure $ Left (Syn (Pure a))
-        Left suspended         -> pure $ (Right . Left) <$> advanceIO suspended
-        Right (displayed, tid) -> pure $ Right $ Right (displayed, tid)
-
-      case sequence advanced of
-        [Left (eid', ios', p', pdbg', pv'), Left (eid'', ios'', q', qdbg', qv')] -> do
-          case (p', q') of
-            (Syn (Pure a), _)
-              -> do
-                   sequence_ [ killThread tid | Right (Right (_, Just tid)) <- advanced ]
-                   mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid' ios' (Syn (next a)) (V (foldV pv' <> foldV qv'))
-            (_, Syn (Pure b))
-              -> do
-                   sequence_ [ killThread tid | Right (Right (_, Just tid)) <- advanced ]
-                   mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv'))
-            _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
-        _ -> 
-          case rights advanced of
-
-
-
-
-  -- gather and unblock in stepOnce let orr unable to comb alone. 
-  -- so maybe comb should be written in advanceIO?
-  -- Well, no matter if `advanceIO Or` gets temporary results or one Pure, gather and unblock must execute. so running thread will finish or be canceled in `advanceIO Or`.
-  -- so comb should be in `advanceIO Or`
-
-type Res = (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
--- data Status = Instant (Syn v a) | TimeConsuming (Syn v a) | Forking (v, Maybe ThreadId)
+-}
+advanceIO nid eid ios rsp@(Syn (Free (Or ps next))) v = do undefined
+  {-
+  let pvs = case v of
+        POr pvs -> pvs
+        _ -> map (const E) ps
+      isEmpty (POr pvs) = all (==E) pvs
+      isEmpty _         = False
+  ended <- newEmptyMVar
+  (eid', ios', r, v') <- comb ended $ map Left ps
+  case r of
+    Left (Syn (Pure a)) -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid' ios' (Syn (next a)) {-(V (foldV pv' <> foldV qv')-})
+    Right ps' -> pure (eid'', ios'', Right (Syn (Free (Or ps' next))), dbgcomp, if isEmpty v' then v else v')
+ 
+  where
+    comb :: MVar (Int, Syn v a) -> [Either (Syn v a) (v Maybe ThreadId)] -> IO (EventCounter, [IO ()], Either (Syn v a) [Syn v a], V v) 
+    comb ended syns = do
+      let isPure (Syn (Pure _)) = True
+          isPure _              = False
+      -- after all advanceIO
+      -- A syn ended, kill all running threads
+      whenJust (find isPure (lefts syns)) $ \syn -> do
+          sequence_ [ killThread tid
+                    | Right (_, Just tid) <- syns
+                    ]
+          pure undefined
+      -- all Left 
+        Nothing -> do
+         -- Display all current views 
+         view $ mconcat $ undefined $ rights syns
+         tids <- undefined
+         (i, newSyn) <- takeMVar ended 
+         comb ended (take i tids ++ [Left newSyn] ++ drop (i + 1) tids)
 -}
 -- gather ----------------------------------------------------------------------
 -- TODO: MonoidMap
@@ -694,17 +718,26 @@ gather (Syn (Free (Dyn _ p ps _))) = M.unionWith concatEventValues (gather p) (M
 gather (Syn (Free (And p q next))) = M.unionWith concatEventValues (gather q) (gather p)
 
 -- or
+{-
 gather (Syn (Free (Or p q next))) = M.unionWith concatEventValues (gather q) (gather p)
-
+-}
 gatherIO
   :: Syn v a
   -> IO (M.Map EventId EventValue)
 
+-- view ... why synchron didn't have it?
+gatherIO (Syn (Free (View _ _))) = pure M.empty 
 -- remote
 gatherIO (Syn (Free (RemoteU trail _))) = trGather trail
 
 -- pure
 gatherIO (Syn (Pure _)) = pure M.empty
+
+-- io
+gatherIO (Syn (Free (StepIO _ _))) = pure M.empty
+
+-- effect
+gatherIO (Syn (Free (StepBlock _ _))) = pure M.empty
 
 -- local
 gatherIO (Syn (Free (Local _ _ _))) = pure M.empty
@@ -729,26 +762,27 @@ gatherIO (Syn (Free (Dyn _ p ps _))) =
 gatherIO (Syn (Free (And p q next))) = M.unionWith concatEventValues <$> gatherIO q <*> gatherIO p
 
 -- or
-gatherIO (Syn (Free (Or p q next))) = M.unionWith concatEventValues <$> gatherIO q <*> gatherIO p
+gatherIO (Syn (Free (Or ps next))) = M.unionsWith concatEventValues <$> (mapM gatherIO ps)
 
 --------------------------------------------------------------------------------
 
-stepOnce :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> IO (Int, Syn v a, V v, [EventId], Bool)
+stepOnce :: Monoid v => M.Map EventId EventValue -> NodeId -> EventCounter -> Syn v a -> V v -> IO (EventCounter, Syn v a, V v, [EventId], Bool)
 stepOnce m' nid eid p v = do
   (eid', ios, p', _, v') <- advanceIO nid eid [] p v
-  m <- gatherIO p'
-  (p'', u) <- unblockIO (m' <> m) p'
+  p'' <- either id pure p' -- StepBlock
+  m <- gatherIO p''
+  (p''', u) <- unblockIO (m' <> m) p''
   sequence_ ios
-  pure (eid', p'', v', M.keys (m' <> m), u)
+  pure (eid', p''', v', M.keys (m' <> m), u)
 
-stepOnce' :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> (Int, Syn v a, DbgSyn -> DbgSyn, V v, M.Map EventId EventValue, [IO ()], Bool)
+stepOnce' :: Monoid v => M.Map EventId EventValue -> NodeId -> EventCounter -> Syn v a -> V v -> (EventCounter, Syn v a, DbgSyn -> DbgSyn, V v, M.Map EventId EventValue, [IO ()], Bool)
 stepOnce' m nid eid p v = (eid', p'', dbg, v', m', ios, u)
   where
     (p', u) = unblock m p
     (eid', ios, p'', dbg, v') = advance nid eid [] p' v
     m' = gather p''
 
-stepAll :: Monoid v => [M.Map EventId EventValue] -> NodeId -> Int -> Syn v a -> V v -> IO (Either (Maybe a) (Int, Syn v a), V v, [([EventId], Syn v a)])
+stepAll :: Monoid v => [M.Map EventId EventValue] -> NodeId -> EventCounter -> Syn v a -> V v -> IO (Either (Maybe a) (EventCounter, Syn v a), V v, [([EventId], Syn v a)])
 stepAll = go []
   where
     go es ms' nid eid p v = do
@@ -767,7 +801,7 @@ stepAll = go []
         (_, True) -> go ((eks, p):es) ms nid eid' p' v'
         (_, False) -> pure (Right (eid', p'), v', (eks, p):es)
 
-stepAll' :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> IO (Either (Maybe a) (Syn v a), Int, [([EventId], Syn v a)])
+stepAll' :: Monoid v => M.Map EventId EventValue -> NodeId -> EventCounter -> Syn v a -> V v -> IO (Either (Maybe a) (Syn v a), EventCounter, [([EventId], Syn v a)])
 stepAll' = go []
   where
     go es m nid eid p v = do
@@ -784,7 +818,7 @@ stepAll' = go []
 
 exhaust :: Typeable v => Monoid v => NodeId -> Syn v a -> IO (Maybe a, v)
 exhaust nid p = do
-  r <- stepAll [] nid 0 p E
+  r <- stepAll [] nid [0] p E
   case r of
     (Left a, v, _)  -> pure (a, foldV v)
     (Right _, _, _) -> error "Blocked"
@@ -803,21 +837,21 @@ spawn (Pool e) p = do
 --------------------------------------------------------------------------------
 
 {-# NOINLINE nextId #-}
-nextId :: IORef Int
-nextId = unsafePerformIO (newIORef 0)
+nextId :: IORef EventCounter
+nextId = unsafePerformIO (newIORef [0])
 
 newEvent :: NodeId -> IO (Event t a)
-newEvent nid = Event const . External <$> atomicModifyIORef' nextId (\eid -> (eid + 1, (nid, eid)))
+newEvent nid = Event const . External <$> atomicModifyIORef' nextId (\eid -> (addOne eid, (nid, eid)))
 
 newEvent' :: (a -> a -> a) -> NodeId -> IO (Event t a)
-newEvent' conc nid = Event conc . External <$> atomicModifyIORef' nextId (\eid -> (eid + 1, (nid, eid)))
+newEvent' conc nid = Event conc . External <$> atomicModifyIORef' nextId (\eid -> (addOne eid, (nid, eid)))
 
-data Context v a = Context NodeId (MVar (Maybe (Int, Syn v a, V v)))
+data Context v a = Context NodeId (MVar (Maybe (EventCounter, Syn v a, V v)))
 
 type Application v a r = (a -> IO (Context v r)) -> IO (Context v r)
 
 run :: NodeId -> Syn v a -> IO (Context v a)
-run nid p = Context nid <$> newMVar (Just (0, p, E))
+run nid p = Context nid <$> newMVar (Just ([0], p, E))
 
 push :: Typeable v => Monoid v => Context v b -> Event t a -> a -> IO (Maybe b, v)
 push (Context nid v) (Event conc ei) a = modifyMVar v $ \v -> case v of
@@ -848,10 +882,11 @@ newTrail (Context nid ctx) = do
         Nothing -> pure (Nothing, (Nothing, E))
         Just (eid, p, v) -> do
           (eid', ios, p', _, v') <- advanceIO nid eid [] p v
+          p'' <- either id pure p'
           sequence_ ios
-          case p' of
-            Syn (Pure a) -> pure (Just (eid', p', v'), (Just a, v'))
-            _ -> pure (Just (eid', p', v'), (Nothing, v'))
+          case p'' of
+            Syn (Pure a) -> pure (Just (eid', p'', v'), (Just a, v'))
+            _ -> pure (Just (eid', p'', v'), (Nothing, v'))
     , trGather  = modifyMVar ctx $ \ctx' -> case ctx' of
         Nothing -> pure (Nothing, M.empty)
         Just (_, p, _) -> (ctx',) <$> gatherIO p

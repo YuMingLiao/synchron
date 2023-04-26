@@ -7,7 +7,7 @@
 module Replica.DOM where
 
 import           Control.Applicative      (empty)
-import           Control.Concurrent       (newEmptyMVar, modifyMVar, newMVar, putMVar, takeMVar)
+import           Control.Concurrent       (newEmptyMVar, tryPutMVar, modifyMVar, newMVar, putMVar, takeMVar)
 import           Control.Monad            (void)
 
 import           Replica.Props            (Props(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
@@ -26,6 +26,7 @@ import qualified Replica.VDOM.Types       as R
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.Replica as Replica
 import qualified Replica.Types as Replica
+import qualified Replica.Application as Replica
 import Network.WebSockets.Connection (defaultConnectionOptions)
 import Chronos.Types as Ch
 import Control.Monad.IO.Class (liftIO)
@@ -50,10 +51,36 @@ compose2 g f x y = g (f x y)
 runReplica :: Syn Replica.DOM.HTML () -> IO ()
 runReplica p = do
   let nid = NodeId 0
-  ctx   <- newMVar (Just (0, p, E))
+  ctx   <- newMVar (Just ([0], p, E))
   block <- newMVar ()
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     traceIO "in Syn's cfgStep"
+    takeMVar block
+    modifyMVar ctx $ \ctx' -> case ctx' of
+      Just (eid, p, v) -> do
+        r <- stepAll mempty nid eid p v
+        case r of
+          (Left _, v', _) -> do
+            pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), (), pure ())) 
+          (Right (eid', p'), v', _) -> do
+            let html = runHTML (foldV v') (Context nid ctx)
+                unblock = putMVar block ()
+            -- putStrLn (BC.unpack $ A.encode html)
+            -- \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re)
+            pure
+              ( Just (eid', p', v')
+              , Just (html, (), unblock)
+              )
+      Nothing -> pure (Nothing, Nothing)
+
+run' :: R.HTML -> (Replica.Context -> Syn Replica.DOM.HTML ()) -> IO ()
+run' header p = do
+  let nid = NodeId 0
+  ctx   <- newEmptyMVar 
+  block <- newMVar ()
+  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" header defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \cbCtx () -> do
+    b <- tryPutMVar ctx (Just ([0], p cbCtx, E)) --only execute at first time. So in Syn step leaving an argument cbCtx every time it is called only works for the first time setup.
+    trace ("tryPutMVar ctx: " ++ show b) (pure ())
     takeMVar block
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do

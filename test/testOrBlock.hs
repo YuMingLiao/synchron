@@ -16,6 +16,7 @@ emit = Syn.emit
 await :: Event t a -> Syn () a
 await = Syn.await
 
+p1 :: Syn () (Either String String)
 p1 = local $ \e -> do
   a <- orr [ Left <$> await e, Right <$> await e]
   pure a
