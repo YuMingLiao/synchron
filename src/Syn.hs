@@ -17,7 +17,7 @@ import Control.Concurrent
 import Control.Monad.Fix (mfix)
 import Control.Monad.Fail
 import Control.Monad.Free
-
+import Control.Monad (forM)
 import Data.Proxy
 import Data.Type.Equality
 
@@ -95,7 +95,9 @@ data SynF v next
 
   | forall a b. Dyn (Event Internal [Syn v ()]) (Syn v b) [(Syn v (), V v)] (b -> next)
 
-  | forall a. Or [Syn v a] (a -> next)
+  | forall a. Or (Syn v a) (Syn v a) (a -> next)
+
+  | forall a. Orr [Syn v a] (a -> next)
 
   | forall a b. And (Syn v a) (Syn v b) ((a, b) -> next)
 
@@ -130,7 +132,8 @@ instance Show (Syn v a) where
   show (Syn (Free (Local _ _ _))) = "local"
   show (Syn (Free (Emit (EventValue (Event _ e) _) _))) = evColor e "▲"
   show (Syn (Free (Await (Event _ e) _))) = evColor e "○"
-  show (Syn (Free (Or ps _))) = "∨ [" <> intercalate ", " (map show ps) <> "]"
+  show (Syn (Free (Or p q _))) = "∨ [" <> show p <> ", " <> show q <> "]"
+  show (Syn (Free (Orr ps _))) = "∨ [" <> intercalate ", " (map show ps) <> "]"
   show (Syn (Free (And a b _))) = "∧ [" <> show a <> ", " <> show b <> "]"
   show (Syn (Free (StepIO _ _))) = "<non-blocking io>"
   {-
@@ -194,7 +197,7 @@ reify :: Event Internal (Syn v a, v) -> Syn v a -> Syn v a
 reify = undefined
 
 orr :: Monoid v => [Syn v a] -> Syn v a
-orr as = Syn $ liftF (Or as id)
+orr as = Syn $ liftF (Orr as id)
 {-
 orr [a] = a
 orr [a, b] = Syn $ liftF (Or a b id)
@@ -362,9 +365,9 @@ unblockIO m rsp@(Syn (Free (Or p q next))) = do
   (q', uq) <- unblockIO m q
   pure (Syn (Free (Or p' q' next)), up || uq)
 -}
-unblockIO m rsp@(Syn (Free (Or ps next))) = do
+unblockIO m rsp@(Syn (Free (Orr ps next))) = do
   (p's, up's) <- unzip <$> mapM (unblockIO m) ps
-  pure (Syn (Free (Or p's next)), or up's)
+  pure (Syn (Free (Orr p's next)), or up's)
 
 
 -- advance ---------------------------------------------------------------------
@@ -648,40 +651,45 @@ advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v = do
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv'))
     _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
 -}
-advanceIO nid eid ios rsp@(Syn (Free (Or ps next))) v = do
-  undefined
-  {-
+advanceIO nid eid ios rsp@(Syn (Free (Orr ps next))) v = do
   let pvs = case v of
         POr pvs -> pvs
         _ -> map (const E) ps
-      isEmpty (POr pvs) = all (==E) pvs
+      isEmpty (POr pvs) = all isE pvs
       isEmpty _         = False
+      isE E = True
+      isE _ = False
 
   done <- newEmptyMVar
-  r <- comb done $ zip3 [0..] (map Left ps) pvs
-  case r of
-       (ios', Left ((Syn (Pure a)), v')) -> mapDbg undefined <$> advanceIO nid (addOne eid) ios' (Syn (next a)) v'{-(V (foldV pv' <> foldV qv')-})
-       (ios', Right (ps', v')) -> pure (addOne eid, ios', Syn (Free (Or ps' next)), undefined, if isEmpty v' then v else v')
+  stepped <- forM (zip3 [0..] ps pvs) $ \(i, p, pv) -> fmap (Left . (pv,)) $ forkIO $ do
+    r <- advanceIO nid (eid ++ [i,0]) [] p pv
+    putMVar done (i, r)
+  let looping :: Monoid v =>
+                 MVar (Int, (EventCounter, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v))
+              -> [Either (V v, ThreadId) (EventCounter, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)] 
+              -> IO ([IO ()], Either (Syn v a) [(Syn v a)], V v)
+      looping done stepped = do
+        let finished = [ x | Right x@(_, _, Syn (Pure a), _, _) <- stepped ]
+            v'' = POr $ map getV stepped
+            getV (Left (v, _)) = v
+            getV (Right (_,_,_,_,v)) = v
+            getP (_,_,p,_,_) = p
+            getIOs (_,ios,_,_,_) = ios
  
-  where
-    comb :: MVar _ -> [(Int, Either (Syn v a) _, V v)] -> IO (Either ([IO ()], Syn v a, V v) ([IO ()], [Syn v a], V v))
-    comb done ps = do
-      stepped <- forM ps $ \(idx, p, pv) -> case p of
-        Left p -> Left <$> advanceIO nid (eid ++ [idx,0]) p pv
-        Right a -> Right a
-      let finished = [x | Left x@(_, _, Right (Syn (Pure a)), _, _) <- stepped]
-      case listToMaybe finished of
-        Just (eid', ios', p', dbg', _) -> do
-          let v' = foldV . POr $ [ v | Left (_, _, _, _, v) <- stepped] ++ [ v | Right (v, _) <- stepped] 
-          sequence_ 
-            [ killThread tid
-            | Right (_, Just tid) <- stepped
-            ]
-          pure $ Left (ios ++ ios', p', v')
-        Nothing -> do
-
-      mapM (advanceIO nid [] (lefts ps)
--}
+        case listToMaybe finished of
+             Just (_, ios', p@(Syn (Pure a)), _, v') -> do
+               sequence_ [ killThread tid | Left (_, tid) <- stepped ]
+               pure (ios ++ ios', Left p, V (foldV v''))
+             Nothing -> case sequence stepped of
+                             Right ps -> pure (ios ++ concatMap getIOs ps, Right (map getP ps), v'') 
+                             Left _ -> do
+                               (i, r) <- takeMVar done 
+                               looping done (take i stepped ++ [Right r] ++ drop (i + 1) stepped)
+  r <- looping done stepped
+  case r of
+       (ios', Left (Syn (Pure a)), v') -> mapDbg undefined <$> advanceIO nid (addOne eid) ios' (Syn (next a)) v'
+       (ios', Right ps', v') -> pure (addOne eid, ios', Syn (Free (Orr ps' next)), undefined, if isEmpty v' then v else v')
+ 
 -- gather ----------------------------------------------------------------------
 -- TODO: MonoidMap
 concatEventValues :: EventValue -> EventValue -> EventValue
@@ -760,7 +768,7 @@ gatherIO (Syn (Free (Dyn _ p ps _))) =
 gatherIO (Syn (Free (And p q next))) = M.unionWith concatEventValues <$> gatherIO q <*> gatherIO p
 
 -- or
-gatherIO (Syn (Free (Or ps next))) = M.unionsWith concatEventValues <$> (mapM gatherIO ps)
+gatherIO (Syn (Free (Orr ps next))) = M.unionsWith concatEventValues <$> (mapM gatherIO ps)
 
 --------------------------------------------------------------------------------
 
