@@ -48,7 +48,7 @@ import Concur (runConcur, withPool, step)
 main = runReplica (orrApp)
 
 orrApp = do
-  orr [text "click me", io $ delay 15]
+  orr [text "click me", button [onClick] []]
   text "clicked or timeout" 
 
 
