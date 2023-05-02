@@ -8,8 +8,8 @@ module Replica.DOM where
 
 import           Control.Applicative      (empty)
 import           Control.Concurrent       (newEmptyMVar, modifyMVar, newMVar, putMVar, takeMVar)
-import           Control.Monad            (void)
-
+import           Control.Monad            (void, when)
+import           Control.Exception        (bracket)
 import           Replica.Props            (Props(Props), Prop(PropText, PropBool, PropEvent, PropMap), key)
 
 import           Data.Bifunctor           (second)
@@ -35,6 +35,9 @@ import Replica.Log (Log, format)
 import           Syn
 import Debug.Trace
 import Control.Monad.STM
+import qualified Control.Monad as M (forever)
+import Control.Concurrent.STM.TQueue
+import Control.Concurrent (forkIO, threadDelay)
 
 newtype HTML = HTML { runHTML :: Context HTML () -> R.HTML }
   deriving (Semigroup, Monoid)
@@ -52,12 +55,13 @@ runReplica p = do
   let nid = NodeId 0
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
+  q <- newTQueueIO
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     traceIO "in Syn's cfgStep"
     takeMVar block
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
-        r <- stepAll mempty nid eid p v
+        r <- bracket (print "in stepAll") (\_ -> print "out stepAll") $ \_-> stepAll mempty nid eid p v q
         case r of
           (Left _, v', _) -> do
             pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), (), pure ())) 
