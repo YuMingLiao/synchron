@@ -38,6 +38,7 @@ import Control.Monad.STM
 import qualified Control.Monad as M (forever)
 import Control.Concurrent.STM.TQueue
 import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.Async (race)
 
 newtype HTML = HTML { runHTML :: Context HTML () -> R.HTML }
   deriving (Semigroup, Monoid)
@@ -56,13 +57,14 @@ runReplica p = do
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
   q <- newTQueueIO
-  forkIO $ M.forever $ do
-    a <- atomically $ peekTQueue q
-    trace ("q: " ++ show a) (pure ())
-    putMVar block ()
+--  forkIO $ M.forever $ do
+--    a <- atomically $ peekTQueue q
+--    trace ("q: " ++ show a) (pure ())
+--    putMVar block ()
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     traceIO "in Syn's cfgStep"
-    takeMVar block
+    r <- race (atomically $ peekTQueue q) (takeMVar block)
+    print ("race:" ++ show r)
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
         r <- bracket (print "in stepAll") (\_ -> print "out stepAll") $ \_-> stepAll mempty nid eid p v q
