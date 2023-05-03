@@ -56,7 +56,7 @@ testOrr = do
     -- orr [text "text", button [onClick] []]
     button [onClick] [text "preview"]
     -- orr [text "text", effect (do threadDelay 10000000; pure 1;)]
-    orr [2 <$ button [onClick] [text "text"], effect (do threadDelay 10000000; pure 1;)]
+    orr [2 <$ button [onClick] [text "text"], effect (do threadDelay 1000000; pure 1;)]
     -- effect (do threadDelay 1000000; pure 1;)
     text "orr returned"
 

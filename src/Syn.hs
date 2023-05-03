@@ -9,9 +9,10 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Syn where
-
+import Prelude hiding (log)
 import Control.Applicative
 import Control.Concurrent
 import Control.Monad.Fix (mfix)
@@ -36,6 +37,13 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import Debug.Trace
 import Control.Monad (when, void)
+import Colog (logByteStringStdout, (<&))
+import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (pack)
+
+bshow :: Show a => a -> ByteString
+bshow = pack . show
+log = logByteStringStdout
 --------------------------------------------------------------------------------
 
 newtype NodeId = NodeId Int deriving (Eq, Ord, Num, Show)
@@ -288,48 +296,49 @@ unblock m rsp@(Syn (Free (Or p q next)))
 unblockIO
   :: M.Map EventId EventValue
   -> Syn v a
+  -> MVar ()
   -> IO (Syn v a, Bool)
 
 -- remote
-unblockIO m rsp@(Syn (Free (RemoteU trail next))) = do
+unblockIO m rsp@(Syn (Free (RemoteU trail next))) _ = do
   u <- trUnblock trail m
   pure (rsp, u)
 
 -- pure
-unblockIO _ rsp@(Syn (Pure a)) = pure (rsp, False)
+unblockIO _ rsp@(Syn (Pure a)) _ = pure (rsp, False)
 
 -- io
-unblockIO _ rsp@(Syn (Free (StepIO _ _))) = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free (StepIO _ _))) _ = pure (rsp, False)
 
 -- effect
-unblockIO _ rsp@(Syn (Free (StepBlock _ _ _))) = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free (StepBlock _ _ _))) _ = pure (rsp, False)
 
 -- local
-unblockIO _ rsp@(Syn (Free (Local _ _ _))) = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free (Local _ _ _))) _ = pure (rsp, False)
 
 -- mapView
-unblockIO m rsp@(Syn (Free (MapView f v next))) = do
-  (v', b) <- unblockIO m v
+unblockIO m rsp@(Syn (Free (MapView f v next))) pr = do
+  (v', b) <- unblockIO m v pr
   pure (Syn (Free (MapView f v' next)), b)
 
 -- forever
-unblockIO _ rsp@(Syn (Free Forever)) = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free Forever)) _ = pure (rsp, False)
 
 -- await
-unblockIO m rsp@(Syn (Free (Await (Event _ eid') next)))
+unblockIO m rsp@(Syn (Free (Await (Event _ eid') next))) pr
   = case M.lookup eid' m of
       Just (EventValue _ a) -> do
-        print ("get " ++ show eid')
+        log <& ("unblock await. get " <> bshow eid')
         pure (Syn (next $ unsafeCoerce a), True)
       Nothing -> do
-        print ("still await" ++ show eid')
+        log <& ("unblock await: cant't. still wait " <> bshow eid')
         pure (rsp, False)
 
 -- dyn
 -- TODO: should new trail be unblockIOed by current cycle as well? answer: NO (i.e. an emit won't have been evaluated)
-unblockIO m rsp@(Syn (Free (Dyn e@(Event _ eid') p ps next))) = do
-  (p', u) <- unblockIO m p
-  ps' <- traverse (unblockIO m) (map fst ps)
+unblockIO m rsp@(Syn (Free (Dyn e@(Event _ eid') p ps next))) pr = do
+  (p', u) <- unblockIO m p pr
+  ps' <- traverse (\p -> unblockIO m p pr) (map fst ps)
   pure (Syn (Free (Dyn e p' (zip (map fst ps') (map snd ps) <> map (,E) newPs) next)), u || or (map snd ps'))
   where
     newPs = case M.lookup eid' m of
@@ -337,19 +346,19 @@ unblockIO m rsp@(Syn (Free (Dyn e@(Event _ eid') p ps next))) = do
               Nothing -> []
 
 -- emit
-unblockIO m rsp@(Syn (Free (Emit _ next))) = pure (Syn next, True)
+unblockIO m rsp@(Syn (Free (Emit _ next))) _ = pure (Syn next, True)
 
 -- and
-unblockIO m rsp@(Syn (Free (And p q next))) = do
-  (p', up) <- unblockIO m p
-  (q', uq) <- unblockIO m q
+unblockIO m rsp@(Syn (Free (And p q next))) pr = do
+  (p', up) <- unblockIO m p pr
+  (q', uq) <- unblockIO m q pr
 
   pure (Syn (Free (And p' q' next)), up || uq)
 
 -- or
-unblockIO m rsp@(Syn (Free (Or p q next))) = do
-  (p', up) <- unblockIO m p
-  (q', uq) <- unblockIO m q
+unblockIO m rsp@(Syn (Free (Or p q next))) pr = do
+  (p', up) <- unblockIO m p pr
+  (q', uq) <- unblockIO m q pr
   pure (Syn (Free (Or p' q' next)), up || uq)
 
 -- advance ---------------------------------------------------------------------
@@ -503,7 +512,7 @@ advanceIO
   -> [IO ()]
   -> Syn v a
   -> V v
-  -> TQueue (M.Map EventId EventValue)
+  -> (TQueue (M.Map EventId EventValue), MVar ())
   -> IO (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
 
 -- remote
@@ -543,7 +552,6 @@ advanceIO nid eid ios rsp@(Syn (Free (MapView f m next))) v q = do
   case rsp' of
     Syn (Pure a) -> advanceIO nid eid' ios' (Syn $ next a) (V $ f (foldV v')) q
     rsp' -> pure (eid', ios', Syn (Free (MapView f rsp' next)), dbg', U f v')
-  where
 
 -- local
 advanceIO nid eid ios (Syn (Free (Local conc f next))) v q
@@ -586,13 +594,13 @@ advanceIO nid eid ios rsp@(Syn (Free (StepIO io next))) v _ = do
   pure (eid, ios, Syn (next a), \_ -> DbgDone, v)
 
 -- effect 
-advanceIO nid eid ios rsp@(Syn (Free (StepBlock io e@(Event _ ei) next))) v q = do
+advanceIO nid eid ios rsp@(Syn (Free (StepBlock io e@(Event _ ei) next))) v (q, pr) = do
   let io' = void $ forkIO $ do
               a <- io 
               atomically $ writeTQueue q (M.singleton ei (EventValue e a))
               a <- atomically $ tryPeekTQueue q 
-              print ("forkIO try peek: " ++ show a)
-  advanceIO nid eid (io':ios) (Syn next) v q
+              log <& ("forkIO try peek: " <> bshow a)
+  advanceIO nid eid (io':ios) (Syn next) v (q, pr)
 
 
 
@@ -639,51 +647,7 @@ advanceIO nid eid ios rsp@(Syn (Free (Or p q next))) v tq = do
     (_, Syn (Pure b))
       -> mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv')) tq
     _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
-{-
-  where 
-    orr_ :: IO (Res, Res)
-    orr_ = 
-      mvar <- io newEmptyTMVarIO
-      comb mvar [Left p, Left q]
-    comb :: TMVar (Int, Syn v a)
-         -> [Either (Syn v a) (v, Maybe ThreadId)] -> IO (Res, Res)
-    comb mvar widgets = do
-      advanced <- forM widgets $ \w -> case w of
-                                                --  advanceIO is removed from here because there is no non-blocking IO to execute.
-                                                -- Left (executed Syn)
-                                                -- Right . Left (unexecuted Syn)
-                                                -- Right . Right (displaying)
-        Left rsp@(Syn (Pure a))          -> pure $ Left <$> advanceIO rsp
-        Left rsp@(Syn (StepIO io next))  -> pure $ Left (Syn (Pure a))
-        Left suspended         -> pure $ (Right . Left) <$> advanceIO suspended
-        Right (displayed, tid) -> pure $ Right $ Right (displayed, tid)
 
-      case sequence advanced of
-        [Left (eid', ios', p', pdbg', pv'), Left (eid'', ios'', q', qdbg', qv')] -> do
-          case (p', q') of
-            (Syn (Pure a), _)
-              -> do
-                   sequence_ [ killThread tid | Right (Right (_, Just tid)) <- advanced ]
-                   mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid' ios' (Syn (next a)) (V (foldV pv' <> foldV qv'))
-            (_, Syn (Pure b))
-              -> do
-                   sequence_ [ killThread tid | Right (Right (_, Just tid)) <- advanced ]
-                   mapDbg (\fd dbg -> DbgJoin (fd dbg)) <$> advanceIO nid eid'' ios'' (Syn (next b)) (V (foldV pv' <> foldV qv'))
-            _ -> pure (eid'', ios'', Syn (Free (Or p' q' next)), dbgcomp, v')
-        _ -> 
-          case rights advanced of
-
-
-
-
-  -- gather and unblock in stepOnce let orr unable to comb alone. 
-  -- so maybe comb should be written in advanceIO?
-  -- Well, no matter if `advanceIO Or` gets temporary results or one Pure, gather and unblock must execute. so running thread will finish or be canceled in `advanceIO Or`.
-  -- so comb should be in `advanceIO Or`
-
-type Res = (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
--- data Status = Instant (Syn v a) | TimeConsuming (Syn v a) | Forking (v, Maybe ThreadId)
--}
 -- gather ----------------------------------------------------------------------
 -- TODO: MonoidMap
 concatEventValues :: EventValue -> EventValue -> EventValue
@@ -763,17 +727,15 @@ gatherIO (Syn (Free (Or p q next))) = M.unionWith concatEventValues <$> gatherIO
 
 --------------------------------------------------------------------------------
 
-stepOnce :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> TQueue (M.Map EventId EventValue) -> IO (Int, Syn v a, V v, [EventId], Bool)
-stepOnce m' nid eid p v q = do
-  print "enter stepOnce"
-  (eid', ios, p', _, v') <- bracket (print "stepOnce -> advanceIO") (\_->print "advanceIO -> stepOnce") $ \_ -> advanceIO nid eid [] p v q
+stepOnce :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> (TQueue (M.Map EventId EventValue), MVar ()) -> IO (Int, Syn v a, V v, [EventId], Bool)
+stepOnce m' nid eid p v q@(tq, pr) = do
+  (eid', ios, p', _, v') <- advanceIO nid eid [] p v q
   m <- gatherIO p'
-  mm <- atomically $ tryPeekTQueue q
+  mm <- atomically $ tryReadTQueue tq
   let m'' = maybe mempty id mm
-  print ("tryPeek:" ++ show m'')
-  (p'', u) <- unblockIO (m' <> m <> m'') p'
+  log <& ("stepOnce tryRead:" <> bshow m'')
+  (p'', u) <- unblockIO (m' <> m <> m'') p' pr
   sequence_ ios
-  print "exit stepOnce"
   pure (eid', p'', v', M.keys (m' <> m <> m''), u)
 
 stepOnce' :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> (Int, Syn v a, DbgSyn -> DbgSyn, V v, M.Map EventId EventValue, [IO ()], Bool)
@@ -783,7 +745,7 @@ stepOnce' m nid eid p v = (eid', p'', dbg, v', m', ios, u)
     (eid', ios, p'', dbg, v') = advance nid eid [] p' v
     m' = gather p''
 
-stepAll :: Monoid v => [M.Map EventId EventValue] -> NodeId -> Int -> Syn v a -> V v -> TQueue (M.Map EventId EventValue) -> IO (Either (Maybe a) (Int, Syn v a), V v, [([EventId], Syn v a)])
+stepAll :: Monoid v => [M.Map EventId EventValue] -> NodeId -> Int -> Syn v a -> V v -> (TQueue (M.Map EventId EventValue), MVar ()) -> IO (Either (Maybe a) (Int, Syn v a), V v, [([EventId], Syn v a)])
 stepAll = go []
   where
     go es ms' nid eid p v q = do
@@ -802,7 +764,7 @@ stepAll = go []
         (_, True) -> go ((eks, p):es) ms nid eid' p' v' q
         (_, False) -> pure (Right (eid', p'), trace (show v') v', (eks, p):es)
 
-stepAll' :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> TQueue (M.Map EventId EventValue) -> IO (Either (Maybe a) (Syn v a), Int, [([EventId], Syn v a)])
+stepAll' :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> (TQueue (M.Map EventId EventValue), MVar ()) -> IO (Either (Maybe a) (Syn v a), Int, [([EventId], Syn v a)])
 stepAll' = go []
   where
     go es m nid eid p v q = do
@@ -820,19 +782,20 @@ stepAll' = go []
 -- TODO: blocked cannot be detected because it waits TQueue every time it is empty.
 exhaust :: Typeable v => Monoid v => NodeId -> Syn v a -> IO (Maybe a, v)
 exhaust nid p = do
+  pr <- newMVar ()
   q <- newTQueueIO
-  go nid 0 p E q
+  go nid 0 p E (q, pr)
   where
-    go nid eid p v q = do
-      r <- stepAll [] nid eid p v q
+    go nid eid p v (q, pr) = do
+      r <- stepAll [] nid eid p v (q, pr)
       case r of
         (Right (eid', p'), v', _) -> do
           isEmpty <- atomically $ isEmptyTQueue q
           case (not isEmpty) of
-               True  -> go nid eid' p' v' q
+               True  -> go nid eid' p' v' (q, pr)
                False -> do
                    atomically $ peekTQueue q
-                   go nid eid' p' v' q
+                   go nid eid' p' v' (q, pr)
                    -- error "Blocked"
         (Left a, v, _)  -> pure (a, foldV v)
 
@@ -869,8 +832,9 @@ run nid p = Context nid <$> newMVar (Just (0, p, E))
 push :: Typeable v => Monoid v => Context v b -> Event t a -> a -> IO (Maybe b, v)
 push (Context nid v) (Event conc ei) a = modifyMVar v $ \v -> case v of
   Just (eid, p, v) -> do
+    pr <- newMVar ()
     q <- newTQueueIO
-    r <- stepAll [M.singleton (setNid ei') (EventValue (Event conc ei') a)] nid eid p v q
+    r <- stepAll [M.singleton (setNid ei') (EventValue (Event conc ei') a)] nid eid p v (q, pr)
 
     case r of
       (Left a, v', _) -> pure (Nothing, (a, foldV v'))
@@ -906,7 +870,7 @@ newTrail (Context nid ctx) = do
     , trUnblock = \m -> modifyMVar ctx $ \ctx' -> case ctx' of
         Nothing -> pure (Nothing, False)
         Just (eid, p, v) -> do
-          (p', u) <- unblockIO m p
+          (p', u) <- unblockIO m p undefined
           pure (Just (eid, p', v), u)
     }
 
