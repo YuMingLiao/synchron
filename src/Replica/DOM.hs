@@ -59,8 +59,8 @@ runReplica p = do
   q <- newTQueueIO
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     traceIO "in Syn's cfgStep"
-    r <- race (atomically $ peekTQueue q) (takeMVar block)
-    print ("race:" ++ show r)
+    -- r <- race (atomically $ peekTQueue q) (takeMVar block)
+    -- print ("race:" ++ show r)
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
         r <- \_-> stepAll mempty nid eid p v q
