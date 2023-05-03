@@ -46,7 +46,6 @@ import Debug.Trace
 import System.IO.Unsafe
 import Concur (runConcur, withPool, step)
 
-main = testOrr
 testOrr = do
   runReplica $ do
     -- effect (do threadDelay 5000000; pure 1;)
@@ -54,10 +53,57 @@ testOrr = do
     --orr [button [onClick] [text "button"], text "text"]
     -- orr [text "text", button [onClick] [text "button"]]
     -- orr [text "text", button [onClick] []]
-    button [onClick] [text "preview"]
+    -- button [onClick] [text "preview"]
     -- orr [text "text", effect (do threadDelay 10000000; pure 1;)]
-    orr [2 <$ button [onClick] [text "text"], effect (do threadDelay 1000000; pure 1;)]
+    s <- orr ["clicked" <$ button [onClick] [text "click"], effect (do threadDelay 2000000; pure "timeout";)]
     -- effect (do threadDelay 1000000; pure 1;)
-    text "orr returned"
+    text s
 
--- bug: halt, no io returns.
+testButtonBeforeOrr = do
+  runReplica $ do
+    button [onClick] [text "view"]
+    s <- orr ["clicked" <$ button [onClick] [text "click"], effect (do threadDelay 2000000; pure "timeout";)]
+    text s
+
+-- works
+testTwoButtons = do
+  runReplica $ do
+    button [onClick] [text "button 1"]
+    button [onClick] [text "button 2"]
+    text "You've clicked two buttons"
+
+-- works
+-- session is unlrated.
+testOrrs = do
+  runReplica $ do
+   orr ["clicked" <$ button [onClick] [text "1"], effect (do threadDelay 2000000; pure "timeout";)]
+   orr ["clicked" <$ button [onClick] [text "2"], effect (do threadDelay 2000000; pure "timeout";)]
+   orr ["clicked" <$ button [onClick] [text "3"], effect (do threadDelay 2000000; pure "timeout";)]
+   orr ["clicked" <$ button [onClick] [text "4"], effect (do threadDelay 2000000; pure "timeout";)]
+   s <- orr ["clicked" <$ button [onClick] [text "5"], effect (do threadDelay 2000000; pure "timeout";)]
+   text s
+
+-- now working. so orr is unrelated.
+-- focusing on effect
+testButtonBeforeEffect = do
+  runReplica $ do
+    button [onClick] [text "button 1"]
+    effect (do threadDelay 5000000; pure 1;)
+    text "You've clicked 1 button"
+
+testEffect = do
+  runReplica $ do
+    effect (do threadDelay 5000000; pure 1;)
+    text "E end"
+
+testEEBE = do
+ runReplica $ do
+    effect (do threadDelay 2000000;)
+    effect (do threadDelay 2000000;)
+    button [onClick] [text "Button"]
+    effect (do threadDelay 2000000;)
+    text "EEBE end"
+
+
+
+main = testEEBE

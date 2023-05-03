@@ -27,7 +27,7 @@ import Type.Reflection
 import Data.IORef
 import           Control.Concurrent       (ThreadId, forkIO, killThread, newEmptyMVar, putMVar, takeMVar)
 import           Control.Concurrent.STM   (STM, TMVar, newEmptyTMVarIO, atomically, putTMVar, takeTMVar)
-import           Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, tryReadTQueue, writeTQueue, peekTQueue, tryPeekTQueue, isEmptyTQueue)
+import           Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, readTQueue, tryReadTQueue, writeTQueue, peekTQueue, tryPeekTQueue, isEmptyTQueue)
 import Data.List (intercalate)
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.Map as M
@@ -40,6 +40,7 @@ import Control.Monad (when, void)
 import Colog (logByteStringStdout, (<&))
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (pack)
+import Control.Monad.Extra (whenJust)
 
 bshow :: Show a => a -> ByteString
 bshow = pack . show
@@ -328,10 +329,9 @@ unblockIO _ rsp@(Syn (Free Forever)) _ = pure (rsp, False)
 unblockIO m rsp@(Syn (Free (Await (Event _ eid') next))) pr
   = case M.lookup eid' m of
       Just (EventValue _ a) -> do
-        log <& ("unblock await. get " <> bshow eid')
+        log <& ("unblock: get " <> bshow eid')
         pure (Syn (next $ unsafeCoerce a), True)
       Nothing -> do
-        log <& ("unblock await: cant't. still wait " <> bshow eid')
         pure (rsp, False)
 
 -- dyn
@@ -733,7 +733,7 @@ stepOnce m' nid eid p v q@(tq, pr) = do
   m <- gatherIO p'
   mm <- atomically $ tryReadTQueue tq
   let m'' = maybe mempty id mm
-  log <& ("stepOnce tryRead:" <> bshow m'')
+  whenJust mm $ \m'' -> log <& ("stepOnce tryRead:" <> bshow m'')
   (p'', u) <- unblockIO (m' <> m <> m'') p' pr
   sequence_ ios
   pure (eid', p'', v', M.keys (m' <> m <> m''), u)
@@ -758,11 +758,11 @@ stepAll = go []
       -- traceIO ("> " <> show p <> ", Events: " <> intercalate "," (map (flip evColor "▲") eks) <> ", U: " <> show u)
       -- traceIO ("< " <> show p')
       -- traceIO ""
-
+      log <& bshow v'
       case (p', u) of
         (Syn (Pure a), _) -> pure (Left (Just a), v', (eks, p):es)
         (_, True) -> go ((eks, p):es) ms nid eid' p' v' q
-        (_, False) -> pure (Right (eid', p'), trace (show v') v', (eks, p):es)
+        (_, False) -> pure (Right (eid', p'), v', (eks, p):es)
 
 stepAll' :: Monoid v => M.Map EventId EventValue -> NodeId -> Int -> Syn v a -> V v -> (TQueue (M.Map EventId EventValue), MVar ()) -> IO (Either (Maybe a) (Syn v a), Int, [([EventId], Syn v a)])
 stepAll' = go []

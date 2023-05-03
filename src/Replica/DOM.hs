@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables         #-}
 
 module Replica.DOM where
-
+import           Prelude                  hiding (log)
 import           Control.Applicative      (empty)
 import           Control.Concurrent       (newEmptyMVar, modifyMVar, newMVar, putMVar, takeMVar)
 import           Control.Monad            (void, when)
@@ -59,9 +59,9 @@ runReplica p = do
   pr <- newMVar ()
   q <- newTQueueIO
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
-    traceIO "in Syn's cfgStep"
-    -- r <- race (atomically $ peekTQueue q) (takeMVar block)
-    -- print ("race:" ++ show r)
+    log <& "in Syn's cfgStep, race"
+    r <- race (takeMVar block) (atomically $ peekTQueue q)
+    log <& "enter from " <> either (const "fire") (const "tqueue") r   
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v) -> do
         r <- stepAll mempty nid eid p v (q,pr)
@@ -70,7 +70,8 @@ runReplica p = do
             pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), (), pure ())) 
           (Right (eid', p'), v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
-                unblock = putMVar block ()
+                unblock = do 
+                  putMVar block ()
             -- putStrLn (BC.unpack $ A.encode html)
             -- \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re)
             pure
