@@ -26,7 +26,7 @@ import Type.Reflection
 import Data.IORef
 import           Control.Concurrent       (ThreadId, forkIO, killThread, newEmptyMVar, putMVar, takeMVar)
 import           Control.Concurrent.STM   (STM, TMVar, newEmptyTMVarIO, atomically, putTMVar, takeTMVar)
-import           Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, tryReadTQueue, writeTQueue, tryPeekTQueue, isEmptyTQueue)
+import           Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, tryReadTQueue, writeTQueue, peekTQueue, tryPeekTQueue, isEmptyTQueue)
 import Data.List (intercalate)
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.Map as M
@@ -817,7 +817,7 @@ stepAll' = go []
         (_, True) -> go ((eks, p):es) M.empty nid eid' p' v' q
         (_, False) -> pure (Right p', eid', (eks, p):es)
 
-
+-- TODO: blocked cannot be detected because it waits TQueue every time it is empty.
 exhaust :: Typeable v => Monoid v => NodeId -> Syn v a -> IO (Maybe a, v)
 exhaust nid p = do
   q <- newTQueueIO
@@ -830,7 +830,10 @@ exhaust nid p = do
           isEmpty <- atomically $ isEmptyTQueue q
           case (not isEmpty) of
                True  -> go nid eid' p' v' q
-               False -> error "BlockeD"
+               False -> do
+                   atomically $ peekTQueue q
+                   go nid eid' p' v' q
+                   -- error "Blocked"
         (Left a, v, _)  -> pure (a, foldV v)
 
 -- Pools -----------------------------------------------------------------------

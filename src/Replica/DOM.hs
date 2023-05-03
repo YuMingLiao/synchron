@@ -56,6 +56,10 @@ runReplica p = do
   ctx   <- newMVar (Just (0, p, E))
   block <- newMVar ()
   q <- newTQueueIO
+  forkIO $ M.forever $ do
+    a <- atomically $ peekTQueue q
+    trace ("q: " ++ show a) (pure ())
+    putMVar block ()
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     traceIO "in Syn's cfgStep"
     takeMVar block
