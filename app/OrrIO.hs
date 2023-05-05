@@ -48,15 +48,7 @@ import Concur (runConcur, withPool, step)
 
 testOrr = do
   runReplica $ do
-    -- effect (do threadDelay 5000000; pure 1;)
-    -- button [onClick] []
-    --orr [button [onClick] [text "button"], text "text"]
-    -- orr [text "text", button [onClick] [text "button"]]
-    -- orr [text "text", button [onClick] []]
-    -- button [onClick] [text "preview"]
-    -- orr [text "text", effect (do threadDelay 10000000; pure 1;)]
     s <- orr ["clicked" <$ button [onClick] [text "click"], effect (do threadDelay 2000000; pure "timeout";)]
-    -- effect (do threadDelay 1000000; pure 1;)
     text s
 
 testButtonBeforeOrr = do
@@ -105,5 +97,17 @@ testEEBE = do
     text "EEBE end"
 
 
+testAndOrr = do
+  runReplica $ do
+    a <- andd (orr [effect $ threadDelay 2000000, text "A"], orr [effect $ threadDelay 3000000, text "B"])
+    io $ print a
+    b <- orr [ andd ( ("A" :: T.Text) <$ effect (threadDelay 1000000)
+                    , "B" <$ effect (threadDelay 2000000))
+             , andd ( "C" <$ effect (threadDelay 3000000)
+                    , "D" <$ effect (threadDelay 4000000))]
+    io $ print (b :: (T.Text, T.Text))
+-- testLoading = do
+--  runReplica $ do
+   
 
-main = testEEBE
+main = testAndOrr

@@ -300,21 +300,21 @@ unblockIO
   -> IO (Syn v a, Bool)
 
 -- remote
-unblockIO m rsp@(Syn (Free (RemoteU trail next))) _ = do
+unblockIO m rsp@(Syn (Free (RemoteU trail next))) = do
   u <- trUnblock trail m
   pure (rsp, u)
 
 -- pure
-unblockIO _ rsp@(Syn (Pure a)) _ = pure (rsp, False)
+unblockIO _ rsp@(Syn (Pure a)) = pure (rsp, False)
 
 -- io
-unblockIO _ rsp@(Syn (Free (StepIO _ _))) _ = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free (StepIO _ _))) = pure (rsp, False)
 
 -- effect
-unblockIO _ rsp@(Syn (Free (StepBlock _ _ _))) _ = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free (StepBlock _ _ _))) = pure (rsp, False)
 
 -- local
-unblockIO _ rsp@(Syn (Free (Local _ _ _))) _ = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free (Local _ _ _))) = pure (rsp, False)
 
 -- mapView
 unblockIO m rsp@(Syn (Free (MapView f v next))) = do
@@ -322,7 +322,7 @@ unblockIO m rsp@(Syn (Free (MapView f v next))) = do
   pure (Syn (Free (MapView f v' next)), b)
 
 -- forever
-unblockIO _ rsp@(Syn (Free Forever)) _ = pure (rsp, False)
+unblockIO _ rsp@(Syn (Free Forever)) = pure (rsp, False)
 
 -- await
 unblockIO m rsp@(Syn (Free (Await (Event _ eid') next))) 
@@ -345,7 +345,7 @@ unblockIO m rsp@(Syn (Free (Dyn e@(Event _ eid') p ps next))) = do
               Nothing -> []
 
 -- emit
-unblockIO m rsp@(Syn (Free (Emit _ next))) _ = pure (Syn next, True)
+unblockIO m rsp@(Syn (Free (Emit _ next))) = pure (Syn next, True)
 
 -- and
 unblockIO m rsp@(Syn (Free (And p q next))) = do
@@ -820,22 +820,23 @@ newEvent nid = Event const . External <$> atomicModifyIORef' nextId (\eid -> (ei
 newEvent' :: (a -> a -> a) -> NodeId -> IO (Event t a)
 newEvent' conc nid = Event conc . External <$> atomicModifyIORef' nextId (\eid -> (eid + 1, (nid, eid)))
 
-data Context v a = Context NodeId (MVar (Maybe (Int, Syn v a, V v)))
+data Context v a = Context NodeId (MVar (Maybe (Int, Syn v a, V v, TQueue (M.Map EventId EventValue))))
 
 type Application v a r = (a -> IO (Context v r)) -> IO (Context v r)
 
 run :: NodeId -> Syn v a -> IO (Context v a)
-run nid p = Context nid <$> newMVar (Just (0, p, E))
+run nid p = do
+  q <- newTQueueIO
+  Context nid <$> newMVar (Just (0, p, E, q)) 
 
 push :: Typeable v => Monoid v => Context v b -> Event t a -> a -> IO (Maybe b, v)
 push (Context nid v) (Event conc ei) a = modifyMVar v $ \v -> case v of
-  Just (eid, p, v) -> do
-    q <- newTQueueIO
+  Just (eid, p, v, q) -> do
     r <- stepAll [M.singleton (setNid ei') (EventValue (Event conc ei') a)] nid eid p v q
 
     case r of
       (Left a, v', _) -> pure (Nothing, (a, foldV v'))
-      (Right (eid', p'), v', _) -> pure (Just (eid', p', v'), (Nothing, foldV v'))
+      (Right (eid', p'), v', _) -> pure (Just (eid', p', v', q), (Nothing, foldV v'))
 
   _ -> pure (Nothing, (Nothing, mempty))
   where
@@ -855,20 +856,20 @@ newTrail (Context nid ctx) = do
     { trNotify  = undefined
     , trAdvance = modifyMVar ctx $ \ctx' -> case ctx' of
         Nothing -> pure (Nothing, (Nothing, E))
-        Just (eid, p, v) -> do
-          (eid', ios, p', _, v') <- advanceIO nid eid [] p v undefined --what's StepBlock advance in newTrail?
+        Just (eid, p, v, q) -> do
+          (eid', ios, p', _, v') <- advanceIO nid eid [] p v q 
           sequence_ ios
           case p' of
-            Syn (Pure a) -> pure (Just (eid', p', v'), (Just a, v'))
-            _ -> pure (Just (eid', p', v'), (Nothing, v'))
+            Syn (Pure a) -> pure (Just (eid', p', v', q), (Just a, v'))
+            _ -> pure (Just (eid', p', v', q), (Nothing, v'))
     , trGather  = modifyMVar ctx $ \ctx' -> case ctx' of
         Nothing -> pure (Nothing, M.empty)
-        Just (_, p, _) -> (ctx',) <$> gatherIO p
+        Just (_, p, _, _) -> (ctx',) <$> gatherIO p
     , trUnblock = \m -> modifyMVar ctx $ \ctx' -> case ctx' of
         Nothing -> pure (Nothing, False)
-        Just (eid, p, v) -> do
-          (p', u) <- unblockIO m p undefined
-          pure (Just (eid, p', v), u)
+        Just (eid, p, v, q) -> do
+          (p', u) <- unblockIO m p 
+          pure (Just (eid, p', v, q), u)
     }
 
 --------------------------------------------------------------------------------

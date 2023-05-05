@@ -54,17 +54,16 @@ compose2 g f x y = g (f x y)
 runReplica :: Syn Replica.DOM.HTML () -> IO ()
 runReplica p = do
   let nid = NodeId 0
-  ctx   <- newMVar (Just (0, p, E))
-  block <- newMVar ()
-  pr <- newMVar ()
   q <- newTQueueIO
+  ctx   <- newMVar (Just (0, p, E, q))
+  block <- newMVar ()
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     log <& "in Syn's cfgStep, race"
     r <- race (takeMVar block) (atomically $ peekTQueue q)
     log <& "enter from " <> either (const "fire") (const "tqueue") r   
     modifyMVar ctx $ \ctx' -> case ctx' of
-      Just (eid, p, v) -> do
-        r <- stepAll mempty nid eid p v (q,pr)
+      Just (eid, p, v, q) -> do
+        r <- stepAll mempty nid eid p v q
         case r of
           (Left _, v', _) -> do
             pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), (), pure ())) 
@@ -75,7 +74,7 @@ runReplica p = do
             -- putStrLn (BC.unpack $ A.encode html)
             -- \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re)
             pure
-              ( Just (eid', p', v')
+              ( Just (eid', p', v', q)
               , Just (html, (), unblock)
               )
       Nothing -> pure (Nothing, Nothing)
