@@ -50,8 +50,7 @@ import GHC.Generics
 import Data.Generic.HKD
 import Data.Text (Text)
 import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
-
-
+import Data.Maybe (catMaybes)
 
 counter x = do
   div [ onClick ] [ text (T.pack $ show x) ]
@@ -129,72 +128,58 @@ instance Monoid Bool where
   mempty = False
 
 
-signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct defaultSignUp :: Validation SignUpForm) $ \valid -> pool $ \p -> do
+signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> pool $ \p -> do
   spawn p (div [] [inputName name])
-  spawn p (div [] [validateName name valid])
+  spawn p (div [] [errName name])
   spawn p (div [] [inputPwd pwd])
-  spawn p (div [] [validatePwd pwd valid])
+  spawn p (div [] [errPwd pwd ])
   spawn p (div [] [inputCfm cfm])
-  spawn p (div [] [validateCfm pwd cfm valid])
-  spawn p (div [] [(loop valid $ stream $ \s -> text (T.pack $ show s))])
-  spawn p $ submitButton name pwd cfm valid
+  spawn p (div [] [errCfm pwd cfm])
+  spawn p $ submitButton name pwd cfm 
   Syn.forever
   where
+    
     inputName v = go mempty
       where 
             go s = do
               s <- inputOnInput "請輸入姓名" s
               putVar v s
               go s 
-    validateName v v1 = loop v $ stream $ \s -> do
-      (bools :: Validation SignUpForm) <- readVar v1
-      r <- pure True
-      putVar v1 (bools & field @"username" .~ Const r)
-      text (T.pack $ show s)
+    note True n = Nothing
+    note False n = Just n
+    vert xs = div [] (map (\x -> div [] [x]) xs)
+    validateName s = do
+      sequence [ print "io validation" >> pure ((s /= "") `note` "Name cannot be empty.")
+               , pure $ True `note` "This name have been taken."
+               ]
+    errName v = loop v $ stream $ \s -> do
+      errors <- io $ catMaybes <$> validateName s
+      vert (map text errors)
     inputPwd v = go mempty
       where go s = do
               s <- inputPassword "請輸入密碼" s 
               putVar v s
               go s
-    validatePwd v valid = loop v $ stream $ \s -> do
-      (bools :: Validation SignUpForm) <- readVar valid
-      putVar valid (bools & field @"password" .~ Const True)
-      text (T.pack $ show s)
+    validatePwd s = 
+      [ (s /= "") `note` "Password cannot be empty." ] 
+    errPwd v = loop v $ stream $ \s -> do
+      vert (map text (catMaybes (validatePwd s))) 
     inputCfm v = go mempty
       where go s = do
               s <- inputPassword "請確認密碼" s 
               putVar v s
               go s
-    validateCfm vPwd vCfm valid = loop vPwd $ stream $ \sPwd -> loop vCfm $ stream $ \sCfm -> do
-      (bools :: Validation SignUpForm) <- readVar valid
-      let res = sPwd == sCfm
-      putVar valid (bools & field @"confirmPassword" .~ Const res)
-      text (T.pack $ show res)
-    submitButton n p c v = loop v $ stream $ \(s :: Validation SignUpForm) -> do 
-      case (and $ map getConst 
-              [ s ^. field @"username"
-              , s ^. field @"password"
-              , s ^. field @"confirmPassword"]) of
-           True -> do
+    validateCfm p c = 
+      [ (p == c) `note` "Passwords do not match." ] 
+    errCfm p c = loop p $ stream $ \p -> loop c $ stream $ \c -> do
+      vert (map text (catMaybes (validateCfm p c))) 
+    submitButton n p c = loop n $ stream $ \n -> loop p $ stream $ \p -> loop c $ stream $ \c -> do 
+      nResults <- io $ validateName n
+      case catMaybes (nResults ++ validatePwd p ++ validateCfm p c) of
+           [] -> do 
              button [onClick] [text "Submit"]
-             pure (Left ())
-           False -> do
-             button [] [text "Can't Submit"]
-                                    
+             pure (Left (Left (Left ())))
+           _ -> button [] [text "Can't Submit"]
+                                   
  
 main = runReplica signUp 
-
-
---
--- if valid is the last, submit won't loop
--- if valid is the first, somehow the whole program gets into a loop and browser keep renewing.
--- it seems I can only have one loop stream. 
---
---                           loop n $ stream $ \name ->  
---                           loop p $ stream $ \pwd -> 
---                           loop c $ stream $ \cfm ->
---                           loop v $ stream $ \valid -> do 
---
---
--- in loop stream
--- one readVar works but two not.
