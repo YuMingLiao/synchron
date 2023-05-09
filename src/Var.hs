@@ -53,21 +53,25 @@ data Stream v a b = Stream { runStream :: a -> Syn v (Either b (Stream v a b)) }
 stream :: (a -> Syn v (Either b (Stream v a b))) -> Stream v a b
 stream = Stream
 
+-- TODO: readVar same Var in loop cause loop to loop.
 loop :: Semigroup a => Monoid v => Var a -> Stream v a b -> Syn v b
 loop v@(Var e) f = do
   a <- readVar v
   go f a e
     
   where
+    awaitNewValue e = do
+      r <- await e
+      case sconcat <$> nonEmpty (lefts r) of
+           Just a' -> pure a'
+           Nothing -> awaitNewValue e
+            
     go f a e = do
-      r <- orr [ Left <$> runStream f a, Right <$> await e ]
+      r <- orr [ Left <$> runStream f a, Right <$> awaitNewValue e ]
       case r of
         Left (Left a) -> pure a
         Left (Right f') -> go f' a e
-        Right r -> do
-          let a' = case sconcat <$> nonEmpty (lefts r) of
-                     Just a' -> a'
-                     Nothing -> a
+        Right a' -> do
           go f a' e
 
 -- TODO: order is swapped, Last = First

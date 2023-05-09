@@ -126,6 +126,8 @@ instance Show (Syn v a) where
   show (Syn (Pure a)) = "◆"
   show (Syn (Free (Async e _))) = "A"
   show (Syn (Free Forever)) = "∞"
+  show (Syn (Free (StepIO _ _ ))) = "io"
+  show (Syn (Free (StepBlock _ _ _))) = "effect"
   show (Syn (Free (Dyn _ p ps _))) = "dyn (" <> show p <> ") [" <> intercalate ", " (map (show . fst) ps) <> "]"
   show (Syn (Free (MapView _ m _))) = "fmap (" <> show m <> ")"
   show (Syn (Free (Remote _ _))) = "remote"
@@ -299,6 +301,8 @@ unblockIO
   -> Syn v a
   -> IO (Syn v a, Bool)
 
+unblockIO _ rsp | trace (show rsp) False = undefined
+
 -- remote
 unblockIO m rsp@(Syn (Free (RemoteU trail next))) = do
   u <- trUnblock trail m
@@ -315,6 +319,9 @@ unblockIO _ rsp@(Syn (Free (StepBlock _ _ _))) = pure (rsp, False)
 
 -- local
 unblockIO _ rsp@(Syn (Free (Local _ _ _))) = pure (rsp, False)
+
+-- view
+unblockIO _ rsp@(Syn (Free (View _ _))) = pure (rsp, False)
 
 -- mapView
 unblockIO m rsp@(Syn (Free (MapView f v next))) = do
@@ -514,6 +521,7 @@ advanceIO
   -> TQueue (M.Map EventId EventValue)
   -> IO (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
 
+advanceIO _ _ _ rsp _ _ | trace ("advanceIO: " ++ show rsp) False = undefined
 -- remote
 advanceIO nid eid ios (Syn (Free (Remote make next))) v q = do
   trail <- make
@@ -588,9 +596,9 @@ advanceIO nid eid ios (Syn (Free (Async io next))) v q
   = advanceIO nid eid (io:ios) (Syn next) v q
 
 -- io
-advanceIO nid eid ios rsp@(Syn (Free (StepIO io next))) v _ = do
+advanceIO nid eid ios rsp@(Syn (Free (StepIO io next))) v q = do
   a <- io
-  pure (eid, ios, Syn (next a), \_ -> DbgDone, v)
+  advanceIO nid eid ios  (Syn (next a)) v q
 
 -- effect 
 advanceIO nid eid ios rsp@(Syn (Free (StepBlock io e@(Event _ ei) next))) v q = do
@@ -599,7 +607,7 @@ advanceIO nid eid ios rsp@(Syn (Free (StepBlock io e@(Event _ ei) next))) v q = 
               atomically $ writeTQueue q (M.singleton ei (EventValue e a))
               a <- atomically $ tryPeekTQueue q 
               log <& ("forkIO try peek: " <> bshow a)
-  advanceIO nid eid (io':ios) (Syn next) v q
+  advanceIO nid eid (io':ios) (Syn next) E q
 
 
 
@@ -687,6 +695,7 @@ gatherIO
   :: Syn v a
   -> IO (M.Map EventId EventValue)
 
+gatherIO rsp | trace (show rsp) False = undefined
 -- remote
 gatherIO (Syn (Free (RemoteU trail _))) = trGather trail
 
@@ -701,6 +710,10 @@ gatherIO (Syn (Free (StepBlock _ _ _))) = pure M.empty
 
 -- local
 gatherIO (Syn (Free (Local _ _ _))) = pure M.empty
+
+-- view
+gatherIO (Syn (Free (View _ _))) = pure M.empty
+
 
 -- mapview
 gatherIO (Syn (Free (MapView _ m next))) = gatherIO m

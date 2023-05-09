@@ -51,6 +51,10 @@ import Data.Generic.HKD
 import Data.Text (Text)
 import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
 
+import Data.Data (Data, gmapQ)
+import Data.Generics.Aliases (extQ, ext1Q, ext2Q)
+
+
 counter x = do
   div [ onClick ] [ text (T.pack $ show x) ]
   counter (x + 1)
@@ -113,11 +117,13 @@ data SignUpForm = SignUpForm {
   username :: Text,
   password :: Text,
   confirmPassword :: Text
-} deriving Generic
+} deriving (Show, Generic, Data)
 
 defaultSignUp = SignUpForm "" "" ""
 
 type Validation a = HKD a (Const Bool)
+
+deriving instance Data (Validation SignUpForm)
 
 instance Semigroup Bool where
   (<>) = (&&)
@@ -134,7 +140,7 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
   spawn p (div [] [inputCfm cfm])
   spawn p (div [] [validateCfm pwd cfm valid])
   spawn p (div [] [(loop valid $ stream $ \s -> text (T.pack $ show s))])
-  -- vert [spawn p (validateName name), spawn p (inputName name)]
+  spawn p $ submitButton name pwd cfm valid 
   Syn.forever
   where
     inputName v = go mempty
@@ -145,7 +151,8 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
               go s 
     validateName v v1 = loop v $ stream $ \s -> do
       (bools :: Validation SignUpForm) <- readVar v1
-      putVar v1 (bools & field @"username" .~ Const True)
+      r <- pure True
+      putVar v1 (bools & field @"username" .~ Const r)
       text (T.pack $ show s)
     inputPwd v = go mempty
       where go s = do
@@ -166,7 +173,30 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
       let res = sPwd == sCfm
       putVar valid (bools & field @"confirmPassword" .~ Const res)
       text (T.pack $ show res)
-    submitButton valid = loop valid $ stream # \sValid -> do
-      button (if allTrue sValid then [onClick] else []) [ text "Submit" ]
+    submitButton n p c v = loop v $ stream $ \valid -> do 
+      --if allTrue valid then button [() <$ onClick] [ text "Submit" ]
+      --                 else button [] [text "Can't Sumbmit"]
+      button [onClick] []
+      n <- readVar n
+      p <- readVar p
+      io $ print $ p  
+      pure $ Left $ ()
+                                         
  
 main = runReplica signUp 
+
+allTrue :: (Data d) => d -> Bool
+allTrue = and . gmapQ (const True `extQ` (==True))
+--
+-- if valid is the last, submit won't loop
+-- if valid is the first, somehow the whole program gets into a loop and browser keep renewing.
+-- it seems I can only have one loop stream. 
+--
+--                           loop n $ stream $ \name ->  
+--                           loop p $ stream $ \pwd -> 
+--                           loop c $ stream $ \cfm ->
+--                           loop v $ stream $ \valid -> do 
+--
+--
+-- in loop stream
+-- one readVar works but two not.

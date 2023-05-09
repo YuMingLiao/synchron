@@ -6,7 +6,7 @@ module RecordVar where
 import Data.Either (lefts, rights)
 import Data.List.NonEmpty
 import Data.Semigroup
-
+import Control.Monad
 import Syn
 import Var
 import Data.Generic.HKD
@@ -21,6 +21,11 @@ type Labels a = HKD a (Const String)
 instance Typeable a => Show (Var a) where
   show _ = "Var " ++ show (typeOf (undefined ::a))
 
+-- RecordVar
+-- recordVar initial $ \Constructor {..} -> {- validation with field dependency can be applied here -}
+-- 1. Save time to type var -> $ \field1 -> var $ \field2 -> ...
+-- 2. validation with field dependency
+--
 -- I intend to use a record initial value to create a record full of vars. But I don't know how to chain local' and get eventName. Should I put them into the same pool? According to syntax, I don't have to. But how could I get a Rank2-like argument into a Var e and assign it to a field?
 -- ideas: Locals, then map record, then sequence in recordVar
 collectEs :: Semigroup a => Syn () [Event Internal a]
@@ -34,6 +39,14 @@ recordVar a@{..} = local' (<>) $ \e1 -> local' (<>) $ \e2 -> pool $ \p -> do
   where
     trail a e = undefined {- the same -}
     -}
+
+recordVar :: All2 Semigroup (Code a) => Monoid v => a -> Int -> (RecordVar a -> Syn v b) -> Syn v b
+recordVar _ n f = do
+  es <- replicateM n $ local pure
+  f undefined
+
+
+-- need RecordMonad / traverse a record where fields are Syn monad
 var :: Semigroup a => Monoid v => a -> (Var a -> Syn v b) -> Syn v b
 var a f = local' (<>) $ \e -> pool $ \p -> do
   spawn p (trail a e)
