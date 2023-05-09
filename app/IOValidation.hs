@@ -51,8 +51,6 @@ import Data.Generic.HKD
 import Data.Text (Text)
 import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
 
-import Data.Data (Data, gmapQ)
-import Data.Generics.Aliases (extQ, ext1Q, ext2Q)
 
 
 counter x = do
@@ -117,13 +115,12 @@ data SignUpForm = SignUpForm {
   username :: Text,
   password :: Text,
   confirmPassword :: Text
-} deriving (Show, Generic, Data)
+} deriving (Show, Generic)
 
 defaultSignUp = SignUpForm "" "" ""
 
 type Validation a = HKD a (Const Bool)
 
-deriving instance Data (Validation SignUpForm)
 
 instance Semigroup Bool where
   (<>) = (&&)
@@ -140,7 +137,7 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
   spawn p (div [] [inputCfm cfm])
   spawn p (div [] [validateCfm pwd cfm valid])
   spawn p (div [] [(loop valid $ stream $ \s -> text (T.pack $ show s))])
-  spawn p $ submitButton name pwd cfm valid 
+  spawn p $ submitButton name pwd cfm valid
   Syn.forever
   where
     inputName v = go mempty
@@ -173,20 +170,21 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> var (deconstruct de
       let res = sPwd == sCfm
       putVar valid (bools & field @"confirmPassword" .~ Const res)
       text (T.pack $ show res)
-    submitButton n p c v = loop v $ stream $ \valid -> do 
-      --if allTrue valid then button [() <$ onClick] [ text "Submit" ]
-      --                 else button [] [text "Can't Sumbmit"]
-      button [onClick] []
-      n <- readVar n
-      p <- readVar p
-      io $ print $ p  
-      pure $ Left $ ()
-                                         
+    submitButton n p c v = loop v $ stream $ \(s :: Validation SignUpForm) -> do 
+      case (and $ map getConst 
+              [ s ^. field @"username"
+              , s ^. field @"password"
+              , s ^. field @"confirmPassword"]) of
+           True -> do
+             button [onClick] [text "Submit"]
+             pure (Left ())
+           False -> do
+             button [] [text "Can't Submit"]
+                                    
  
 main = runReplica signUp 
 
-allTrue :: (Data d) => d -> Bool
-allTrue = and . gmapQ (const True `extQ` (==True))
+
 --
 -- if valid is the last, submit won't loop
 -- if valid is the first, somehow the whole program gets into a loop and browser keep renewing.

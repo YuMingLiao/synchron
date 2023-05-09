@@ -301,7 +301,7 @@ unblockIO
   -> Syn v a
   -> IO (Syn v a, Bool)
 
-unblockIO _ rsp | trace (show rsp) False = undefined
+-- unblockIO _ rsp | trace (show rsp) False = undefined
 
 -- remote
 unblockIO m rsp@(Syn (Free (RemoteU trail next))) = do
@@ -521,7 +521,7 @@ advanceIO
   -> TQueue (M.Map EventId EventValue)
   -> IO (Int, [IO ()], Syn v a, DbgSyn -> DbgSyn, V v)
 
-advanceIO _ _ _ rsp _ _ | trace ("advanceIO: " ++ show rsp) False = undefined
+-- advanceIO _ _ _ rsp _ _ | trace ("advanceIO: " ++ show rsp) False = undefined
 -- remote
 advanceIO nid eid ios (Syn (Free (Remote make next))) v q = do
   trail <- make
@@ -695,7 +695,7 @@ gatherIO
   :: Syn v a
   -> IO (M.Map EventId EventValue)
 
-gatherIO rsp | trace (show rsp) False = undefined
+-- gatherIO rsp | trace (show rsp) False = undefined
 -- remote
 gatherIO (Syn (Free (RemoteU trail _))) = trGather trail
 
@@ -770,7 +770,6 @@ stepAll = go []
       -- traceIO ("> " <> show p <> ", Events: " <> intercalate "," (map (flip evColor "▲") eks) <> ", U: " <> show u)
       -- traceIO ("< " <> show p')
       -- traceIO ""
-      log <& bshow v'
       case (p', u) of
         (Syn (Pure a), _) -> pure (Left (Just a), v', (eks, p):es)
         (_, True) -> go ((eks, p):es) ms nid eid' p' v' q
