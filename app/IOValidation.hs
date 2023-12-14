@@ -52,10 +52,6 @@ import Data.Text (Text)
 import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
 import Data.Maybe (catMaybes)
 
-counter x = do
-  div [ onClick ] [ text (T.pack $ show x) ]
-  counter (x + 1)
-
 inputOnEnter p v = do
   e <- input [ autofocus True, placeholder p, value v, Left <$> onInput, Right <$> onKeyDown ]
   case e of
@@ -74,40 +70,6 @@ inputPassword p v = do
 
 
  
-shared :: Syn () ()
-shared = local $ \end -> local $ \st -> pool $ \p -> do
-  spawn p (set st end)
-  spawn p (get st)
-  await end
-  where
-    set st end = do
-      emit st 4
-      emit st 5
-      emit st 6
-      emit st 7
-      emit end ()
-
-    get st = do
-      a <- await st
-      async (print a)
-      get st
-
-ttext t = do
-  span [ onDoubleClick ] [ text t ]
-  inputOnEnter "" t
--- I guess putVar should never show in `\s -> ...`. Kind of violate something.
--- So I shouldn't use v to set up an initial value that can be changed by user later.
--- the putVar widget and showing widget needs to be separated.
--- so putVar should be in Syn. showing widget should be in loop stream.
--- a bit like parent widget keep control of shared state in Flutter.
---
--- Okay, so if I don't use spawn, it means squential showing widgets, one after another.
--- spawn is a bit like nailing a varying painting on the wall. It decides sequence I guess. Or is it just about event pool?
---  Syn.forever or Syn will end instantly. If there is a Syn here, the whole Syn will end with its branching logic.
---  spawn widget shows later than plain widget
---  spawns in andd shows horiztonal and reversed.
---  So no vertical for spawns.
---  But in todos, spawn div then vertical.
 vert xs = div [] (map (\x -> div [] [x]) xs)
 
 data SignUpForm = SignUpForm {
@@ -138,7 +100,6 @@ signUp = var "" $ \name -> var "" $ \pwd -> var "" $ \cfm -> pool $ \p -> do
   spawn p $ submitButton name pwd cfm 
   Syn.forever
   where
-    
     inputName v = go mempty
       where 
             go s = do

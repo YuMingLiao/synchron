@@ -52,12 +52,15 @@ compose2 :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 compose2 g f x y = g (f x y)
 
 runReplica :: Syn Replica.DOM.HTML () -> IO ()
-runReplica p = do
+runReplica p = runWithHeaders [] p
+
+runWithHeaders :: R.HTML -> Syn Replica.DOM.HTML () -> IO ()
+runWithHeaders h p = do
   let nid = NodeId 0
   q <- newTQueueIO
   ctx   <- newMVar (Just (0, p, E, q))
   block <- newMVar ()
-  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
+  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     log <& "in Syn's cfgStep, race"
     r <- race (takeMVar block) (atomically $ peekTQueue q)
     log <& "enter from " <> either (const "fire") (const "tqueue") r   

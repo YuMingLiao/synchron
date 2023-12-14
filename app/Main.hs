@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
-
+-- >>> 1 + 1
+--
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM

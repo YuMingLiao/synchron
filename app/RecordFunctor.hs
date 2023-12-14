@@ -9,3 +9,7 @@ data Config' a = Config
 
 configHeads :: Config -> Config' Char
 configHeads = fmap head
+
+
+what's the difference between barbie and https://stackoverflow.com/questions/24922375/map-identity-functor-over-record? 
+
