@@ -569,7 +569,7 @@ advanceIO nid eid ios (Syn (Free (Dyn e p ps next))) v q = do
   let pv = case v of
         E -> E
         P pv _ -> pv
-  
+        otherwise -> otherwise
   (eid', ios', p', dbg', v') <- advanceIO nid eid ios p pv q
 
   let go rps eid ios [] = pure (eid, ios, map fst (reverse rps), \_ -> DbgDone, P v' (V $ foldMap foldV (map (snd . fst) (reverse rps))))

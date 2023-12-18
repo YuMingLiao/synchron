@@ -151,7 +151,7 @@ testChat
         Right msg -> WS.send ws msg
       chatConn ws msg
 
-main = testDist
+main = testRemote
 
 -- Replica ---------------------------------------------------------------------
 
