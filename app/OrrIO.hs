@@ -106,8 +106,10 @@ testAndOrr = do
              , andd ( "C" <$ effect (threadDelay 3000000)
                     , "D" <$ effect (threadDelay 4000000))]
     io $ print (b :: (T.Text, T.Text))
--- testLoading = do
---  runReplica $ do
-   
 
-main = testAndOrr
+testLoading = do
+  runReplica $ do
+    _ <- (effect $ threadDelay 2000000) <|> text "loading"
+    text "loaded"
+
+main = testLoading

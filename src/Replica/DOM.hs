@@ -61,9 +61,9 @@ runWithHeaders h p = do
   ctx   <- newMVar (Just (0, p, E, q))
   block <- newMVar ()
   (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
-    log <& "in Syn's cfgStep, race"
+    -- log <& "in Syn's cfgStep, race"
     r <- race (takeMVar block) (atomically $ peekTQueue q)
-    log <& "enter from " <> either (const "fire") (const "tqueue") r   
+    -- log <& "enter from " <> either (const "fire") (const "tqueue") r   
     modifyMVar ctx $ \ctx' -> case ctx' of
       Just (eid, p, v, q) -> do
         r <- stepAll mempty nid eid p v q

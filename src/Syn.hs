@@ -199,10 +199,10 @@ reify :: Event Internal (Syn v a, v) -> Syn v a -> Syn v a
 reify = undefined
 
 orr :: Monoid v => [Syn v a] -> Syn v a
-orr [a] = a
-orr [a, b] = Syn $ liftF (Or a b id)
+orr [] = empty
+orr (a:[]) = a
+orr (a:b:[]) = Syn $ liftF (Or a b id)
 orr (a:as) = orr [a, orr as]
-
 
 orr' :: Monoid v => Syn v a -> Syn v a -> Syn v a
 orr' a b = Syn $ liftF (Or a b id)
@@ -335,7 +335,7 @@ unblockIO _ rsp@(Syn (Free Forever)) = pure (rsp, False)
 unblockIO m rsp@(Syn (Free (Await (Event _ eid') next))) 
   = case M.lookup eid' m of
       Just (EventValue _ a) -> do
-        log <& ("unblock: get " <> bshow eid')
+        --log <& ("unblock: get " <> bshow eid')
         pure (Syn (next $ unsafeCoerce a), True)
       Nothing -> do
         pure (rsp, False)
@@ -606,7 +606,7 @@ advanceIO nid eid ios rsp@(Syn (Free (StepBlock io e@(Event _ ei) next))) v q = 
               a <- io 
               atomically $ writeTQueue q (M.singleton ei (EventValue e a))
               a <- atomically $ tryPeekTQueue q 
-              log <& ("forkIO try peek: " <> bshow a)
+              --log <& ("forkIO try peek: " <> bshow a)
   advanceIO nid eid (io':ios) (Syn next) E q
 
 
@@ -745,7 +745,7 @@ stepOnce m' nid eid p v q = do
   m <- gatherIO p'
   mm <- atomically $ tryReadTQueue q
   let m'' = maybe mempty id mm
-  whenJust mm $ \m'' -> log <& ("stepOnce tryRead:" <> bshow m'')
+  -- whenJust mm $ \m'' -> log <& ("stepOnce tryRead:" <> bshow m'')
   (p'', u) <- unblockIO (m' <> m <> m'') p'
   sequence_ ios
   pure (eid', p'', v', M.keys (m' <> m <> m''), u)
