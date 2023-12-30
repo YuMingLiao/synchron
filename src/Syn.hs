@@ -44,7 +44,8 @@ import Control.Monad.Extra (whenJust)
 
 bshow :: Show a => a -> ByteString
 bshow = pack . show
-log = logByteStringStdout
+
+-- log = logByteStringStdout
 --------------------------------------------------------------------------------
 
 newtype NodeId = NodeId Int deriving (Eq, Ord, Num, Show)
@@ -605,8 +606,8 @@ advanceIO nid eid ios rsp@(Syn (Free (StepBlock io e@(Event _ ei) next))) v q = 
   let io' = void $ forkIO $ do
               a <- io 
               atomically $ writeTQueue q (M.singleton ei (EventValue e a))
-              a <- atomically $ tryPeekTQueue q 
-              --log <& ("forkIO try peek: " <> bshow a)
+              -- a <- atomically $ tryPeekTQueue q 
+              -- log <& ("forkIO try peek: " <> bshow a)
   advanceIO nid eid (io':ios) (Syn next) E q
 
 

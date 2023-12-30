@@ -52,15 +52,18 @@ compose2 :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 compose2 g f x y = g (f x y)
 
 runReplica :: Syn Replica.DOM.HTML () -> IO ()
-runReplica p = runWithHeaders [] p
+runReplica p = runWithHeader 3985 [] p
 
-runWithHeaders :: R.HTML -> Syn Replica.DOM.HTML () -> IO ()
-runWithHeaders h p = do
+runReplica' :: Int -> Syn Replica.DOM.HTML () -> IO ()
+runReplica' port p = runWithHeader port [] p
+
+runWithHeader :: Int -> R.HTML -> Syn Replica.DOM.HTML () -> IO ()
+runWithHeader port h p = do
   let nid = NodeId 0
   q <- newTQueueIO
   ctx   <- newMVar (Just (0, p, E, q))
   block <- newMVar ()
-  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
+  (flip Replica.app) (Warp.run port) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
     -- log <& "in Syn's cfgStep, race"
     r <- race (takeMVar block) (atomically $ peekTQueue q)
     -- log <& "enter from " <> either (const "fire") (const "tqueue") r   
@@ -69,7 +72,10 @@ runWithHeaders h p = do
         r <- stepAll mempty nid eid p v q
         case r of
           (Left _, v', _) -> do
-            pure (Nothing, Just (runHTML (foldV v') (Context nid ctx), (), pure ())) 
+            let html = runHTML (foldV v') (Context nid ctx)
+            pure ( Nothing
+                 , Just (html, (), pure ())
+                 ) 
           (Right (eid', p'), v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
                 unblock = do 
