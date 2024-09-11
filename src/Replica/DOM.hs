@@ -60,10 +60,10 @@ runReplica' port p = runWithHeader port [] p
 runWithHeader :: Int -> R.HTML -> Syn Replica.DOM.HTML () -> IO ()
 runWithHeader port h p = do
   let nid = NodeId 0
-  q <- newTQueueIO
-  ctx   <- newMVar (Just (0, p, E, q))
-  block <- newMVar ()
-  (flip Replica.app) (Warp.run port) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
+  (flip Replica.app) (Warp.run port) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure (Nothing, Nothing, Nothing))) $ liftIO `compose2` \_ (mq,mctx,mblock) -> do
+    q <- maybe newTQueueIO pure mq
+    ctx <- maybe (newMVar (Just (0, p, E, q))) pure mctx
+    block <- maybe (newMVar ()) pure mblock 
     -- log <& "in Syn's cfgStep, race"
     r <- race (takeMVar block) (atomically $ peekTQueue q)
     -- log <& "enter from " <> either (const "fire") (const "tqueue") r   
@@ -74,7 +74,7 @@ runWithHeader port h p = do
           (Left _, v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
             pure ( Nothing
-                 , Just (html, (), pure ())
+                 , Just (html, (Just q, Just ctx, Just block), pure ())
                  ) 
           (Right (eid', p'), v', _) -> do
             let html = runHTML (foldV v') (Context nid ctx)
@@ -84,7 +84,7 @@ runWithHeader port h p = do
             -- \re -> fmap (>> putMVar block()) $ fireEvent html (Replica.evtPath re) (Replica.evtType re) (DOMEvent $ Replica.evtEvent re)
             pure
               ( Just (eid', p', v', q)
-              , Just (html, (), unblock)
+              , Just (html, (Just q, Just ctx, Just block), unblock)
               )
       Nothing -> pure (Nothing, Nothing)
 
