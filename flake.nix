@@ -2,6 +2,9 @@
   inputs = rec {
     flake-parts.url = "github:hercules-ci/flake-parts";
     haskell-flake.url = "github:srid/haskell-flake";
+    replica.url = "git+file:///home/nixos/fix/kamoii-replica";
+    replica.flake = false;
+ 
   };
   outputs =
     inputs@{
@@ -36,8 +39,10 @@
             packages = {
               # aeson.source = "1.5.0.0";      # Override aeson to a custom version from Hackage
               # shower.source = inputs.shower; # Override shower to a custom source path
+              replica.source = inputs.replica;
             };
             settings = {
+              list-zipper.jailbreak = true;
               #  aeson = {
               #    check = false;
               #  };
