@@ -33,6 +33,22 @@
         "type": "github"
       }
     },
+    "kamoii-replica": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1727941959,
+        "narHash": "sha256-xOlYCJ5L3zsyjK01q5MA0Dsav6rfApzppq3vM7Euw2E=",
+        "ref": "refs/heads/dev",
+        "rev": "91774971c89d8e341e317ccb21ac75b48e2bafa0",
+        "revCount": 112,
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 0,
@@ -60,23 +76,24 @@
     "replica": {
       "flake": false,
       "locked": {
-        "lastModified": 1727941959,
-        "narHash": "sha256-xOlYCJ5L3zsyjK01q5MA0Dsav6rfApzppq3vM7Euw2E=",
-        "ref": "refs/heads/dev",
-        "rev": "91774971c89d8e341e317ccb21ac75b48e2bafa0",
-        "revCount": 112,
+        "lastModified": 1680005145,
+        "narHash": "sha256-R1k50x8epHvUb0K5iIKqemhnE9MO3TXpls71G/4Wfhc=",
+        "ref": "refs/heads/master",
+        "rev": "ba25d5095a328b6fdacbb2a7ff61c89823e54d77",
+        "revCount": 49,
         "type": "git",
-        "url": "file:///home/nixos/fix/kamoii-replica"
+        "url": "file:///home/nixos/fix/replica"
       },
       "original": {
         "type": "git",
-        "url": "file:///home/nixos/fix/kamoii-replica"
+        "url": "file:///home/nixos/fix/replica"
       }
     },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
         "haskell-flake": "haskell-flake",
+        "kamoii-replica": "kamoii-replica",
         "nixpkgs": "nixpkgs",
         "replica": "replica"
       }

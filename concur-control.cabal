@@ -73,7 +73,7 @@ library
 executable concur-control-exe
   main-is: Main.hs
   other-modules:
-      Connector
+      --Connector
       Paths_concur_control
   hs-source-dirs:
       app

@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Main where
-
+module Connector where
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
