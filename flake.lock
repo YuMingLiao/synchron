@@ -60,17 +60,17 @@
     "replica": {
       "flake": false,
       "locked": {
-        "lastModified": 1611173572,
-        "narHash": "sha256-gKR5ZoyaV4/rIUJ55o5VvVnV3PK4SeO9SId+zmg/kHU=",
-        "owner": "kamoii",
-        "repo": "replica",
-        "rev": "be22fb5f8517ff88e39001dd924f7175fc96d20f",
-        "type": "github"
+        "lastModified": 1727941959,
+        "narHash": "sha256-xOlYCJ5L3zsyjK01q5MA0Dsav6rfApzppq3vM7Euw2E=",
+        "ref": "refs/heads/dev",
+        "rev": "91774971c89d8e341e317ccb21ac75b48e2bafa0",
+        "revCount": 112,
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
       },
       "original": {
-        "owner": "kamoii",
-        "repo": "replica",
-        "type": "github"
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
       }
     },
     "root": {
