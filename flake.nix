@@ -49,8 +49,6 @@
               replica.source = inputs.kamoii-replica;
             };
 
-            devShell = {
-            };
           };
           packages.default = self'.packages.concur-control; 
         };
