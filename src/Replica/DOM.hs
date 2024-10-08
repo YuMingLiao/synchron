@@ -60,7 +60,7 @@ runReplica' port p = runWithHeader port [] p
 runWithHeader :: Int -> R.HTML -> Syn Replica.DOM.HTML () -> IO ()
 runWithHeader port h p = do
   let nid = NodeId 0
-  (flip Replica.app) (Warp.run port) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure (Nothing, Nothing, Nothing))) $ liftIO `compose2` \_ (mq,mctx,mblock) -> do
+  (flip Replica.app) (Warp.run port) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure (Nothing, Nothing, Nothing))) $ \(mq,mctx,mblock) -> liftIO $ do
     q <- maybe newTQueueIO pure mq
     ctx <- maybe (newMVar (Just (0, p, E, q))) pure mctx
     block <- maybe (newMVar ()) pure mblock 

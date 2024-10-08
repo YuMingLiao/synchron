@@ -1,0 +1,120 @@
+{
+  "nodes": {
+    "check-flake": {
+      "locked": {
+        "lastModified": 1683070462,
+        "narHash": "sha256-FrfgxQaMGIMGGgT1K0jbGEiXqZoIyyUR8jzuJ03Cf00=",
+        "owner": "srid",
+        "repo": "check-flake",
+        "rev": "24ba082179435ce37085c06ffcfcac6d4c570674",
+        "type": "github"
+      },
+      "original": {
+        "owner": "srid",
+        "repo": "check-flake",
+        "type": "github"
+      }
+    },
+    "flake-parts": {
+      "inputs": {
+        "nixpkgs-lib": "nixpkgs-lib"
+      },
+      "locked": {
+        "lastModified": 1727826117,
+        "narHash": "sha256-K5ZLCyfO/Zj9mPFldf3iwS6oZStJcU4tSpiXTMYaaL0=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "3d04084d54bedc3d6b8b736c70ef449225c361b1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "haskell-flake": {
+      "locked": {
+        "lastModified": 1728227251,
+        "narHash": "sha256-JLDhMFyGyFe0QJAbCuSxB7/kjUCA7uUAMa6BFRORwXk=",
+        "owner": "srid",
+        "repo": "haskell-flake",
+        "rev": "9cbfbfc38f1fbf9a0f471795c84780211875fd45",
+        "type": "github"
+      },
+      "original": {
+        "owner": "srid",
+        "repo": "haskell-flake",
+        "type": "github"
+      }
+    },
+    "kamoii-replica": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1728303209,
+        "narHash": "sha256-PUBZoEH7rda1JsKK7FJ6RdtRHW0pZBooNL4emAejgDo=",
+        "ref": "refs/heads/dev",
+        "rev": "af872862ba1417a47a322ac62b10b2a1d0edbe5e",
+        "revCount": 114,
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 0,
+        "narHash": "sha256-NmcVhGElxDbmEWzgXsyAjlRhUus/nEqPC5So7BOJLUM=",
+        "path": "/nix/store/mvz96grv31nxq69ldw5a5pn2qh1s6ca6-source",
+        "type": "path"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
+    "nixpkgs-lib": {
+      "locked": {
+        "lastModified": 1727825735,
+        "narHash": "sha256-0xHYkMkeLVQAMa7gvkddbPqpxph+hDzdu1XdGPJR+Os=",
+        "type": "tarball",
+        "url": "https://github.com/NixOS/nixpkgs/archive/fb192fec7cc7a4c26d51779e9bab07ce6fa5597a.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://github.com/NixOS/nixpkgs/archive/fb192fec7cc7a4c26d51779e9bab07ce6fa5597a.tar.gz"
+      }
+    },
+    "replica": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1680005145,
+        "narHash": "sha256-R1k50x8epHvUb0K5iIKqemhnE9MO3TXpls71G/4Wfhc=",
+        "ref": "refs/heads/master",
+        "rev": "ba25d5095a328b6fdacbb2a7ff61c89823e54d77",
+        "revCount": 49,
+        "type": "git",
+        "url": "file:///home/nixos/fix/replica"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:///home/nixos/fix/replica"
+      }
+    },
+    "root": {
+      "inputs": {
+        "check-flake": "check-flake",
+        "flake-parts": "flake-parts",
+        "haskell-flake": "haskell-flake",
+        "kamoii-replica": "kamoii-replica",
+        "nixpkgs": "nixpkgs",
+        "replica": "replica"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
