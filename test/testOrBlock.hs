@@ -21,10 +21,17 @@ p1 = local $ \e -> do
   a <- orr [ Left <$> await e, Right <$> await e]
   pure a
 
+p2 :: Syn () (Either () String)
+p2 = local $ \e -> do
+  a <- orr [ Left <$> io (print "hello" ), Right <$> io (getLine)]
+  pure a
+
+
 test :: (Show a, Eq a) => Syn () a -> a -> Assertion
 test f a = ((fromJust . fst) <$> exhaust localNid f) >>= (@?= a)
 
 main :: IO ()
 main = defaultMain $ testGroup "Example tests"
-  [ testCase "p1" $ test p1 (Left "B")
+  [ testCase "p1" $ test p1 (Left "B") --doomed to fail
+  , testCase "p2" $ test p2 (Left ())
   ]
