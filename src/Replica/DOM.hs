@@ -53,7 +53,8 @@ runReplica p = do
   let nid = NodeId 0
   ctx   <- newMVar (Just ([0], p, E))
   block <- newMVar ()
-  (flip Replica.app) (Warp.run 3985) $ Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) $ liftIO `compose2` \_ () -> do
+  let cfg = Replica.Config "Synchron" [] defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure ())) 
+  (flip Replica.app) (Warp.run 3985) $ cfg $ \st -> liftIO $ do
     traceIO "in Syn's cfgStep"
     takeMVar block
     modifyMVar ctx $ \ctx' -> case ctx' of
@@ -72,7 +73,7 @@ runReplica p = do
               , Just (html, (), unblock)
               )
       Nothing -> pure (Nothing, Nothing)
-
+{- 
 run' :: R.HTML -> (Replica.Context -> Syn Replica.DOM.HTML ()) -> IO ()
 run' header p = do
   let nid = NodeId 0
@@ -98,7 +99,7 @@ run' header p = do
               , Just (html, (), unblock)
               )
       Nothing -> pure (Nothing, Nothing)
-
+-}
 el' :: Maybe R.Namespace -> T.Text -> [Props a] -> [Syn HTML a] -> Syn HTML a
 el' ns e attrs children = do
   attrs' <- traverse toAttr attrs
