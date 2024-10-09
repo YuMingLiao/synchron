@@ -1,5 +1,6 @@
 {
   inputs = rec {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     haskell-flake.url = "github:srid/haskell-flake";
     kamoii-replica.url = "git+file:///home/nixos/fix/kamoii-replica";
@@ -31,16 +32,23 @@
           ...
         }:
         {
-          haskellProjects.ghc965 = {
-            basePackages = pkgs.haskell.packages.ghc965;
+          haskellProjects.ghc9101 = {
+            basePackages = pkgs.haskell.packages.ghc9101;
             defaults.packages = { };
             settings = {
               list-zipper.jailbreak = true;
+              websockets.jailbreak = true;
+              bytebuild.jailbreak = true;
+              chronos.jailbreak = true;
+            };
+            packages = {
+              websockets.source = "0.13.0.0";
             };
           };
 
           haskellProjects.no-session-synchron = {
-            basePackages = config.haskellProjects.ghc965.outputs.finalPackages;
+            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
+
             packages = {
               replica.source = inputs.replica;
             };
@@ -51,7 +59,7 @@
               root = ./.;
               fileset = pkgs.lib.fileset.difference ./. ./flake.nix; 
             });
-            basePackages = config.haskellProjects.ghc965.outputs.finalPackages;
+            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
 
             packages = {
               replica.source = inputs.kamoii-replica;
