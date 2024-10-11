@@ -1,8 +1,9 @@
 {
   inputs = rec {
-    common.follows = "kamoii-replica/common";
+    common.url = "github:YuMingLiao/common";
     nixpkgs.follows = "common/nixpkgs";
     kamoii-replica.url = "github:YuMingLiao/kamoii-replica";
+    kamoii-replica.inputs.common.follows = "common";
     list-zipper.url = "github:system-f/list-zipper";
     list-zipper.flake = false;
   };

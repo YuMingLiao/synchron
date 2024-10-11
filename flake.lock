@@ -24,11 +24,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1728624059,
-        "narHash": "sha256-NEEJISOaVHqDYptNHpMyr3JrdCu23WFVRFVYGKn684c=",
+        "lastModified": 1728626944,
+        "narHash": "sha256-FgK+sZ8At9/XgONZOYIAZ/lh5ke1oLHExe9ESIIgPTE=",
         "owner": "YuMingLiao",
         "repo": "common",
-        "rev": "52bf9e36af1c8030c1c3bfebc9405074b290513d",
+        "rev": "73150f32deed7f171c1b39dfea6849aaaf0602f5",
         "type": "github"
       },
       "original": {
@@ -72,7 +72,9 @@
     },
     "kamoii-replica": {
       "inputs": {
-        "common": "common",
+        "common": [
+          "common"
+        ],
         "nixpkgs": [
           "kamoii-replica",
           "common",
@@ -80,11 +82,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1728624942,
-        "narHash": "sha256-wk9Ym2xa2z+4DK2zOReb2HMctxqoUTB1DU3b5D0yNCg=",
+        "lastModified": 1728628394,
+        "narHash": "sha256-vMRAAkWo5g8PBvT2/1xsNEOxN7Y2n0khJDA45Mr0PVw=",
         "owner": "YuMingLiao",
         "repo": "kamoii-replica",
-        "rev": "4189d42b12ba1f5d84ea0ebdd826289b41386d33",
+        "rev": "997e42a022ddf2bd0eaed639f6d21fb8e46052fe",
         "type": "github"
       },
       "original": {
@@ -139,10 +141,7 @@
     },
     "root": {
       "inputs": {
-        "common": [
-          "kamoii-replica",
-          "common"
-        ],
+        "common": "common",
         "kamoii-replica": "kamoii-replica",
         "list-zipper": "list-zipper",
         "nixpkgs": [
