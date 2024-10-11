@@ -1,28 +1,18 @@
 {
   inputs = rec {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    haskell-flake.url = "github:srid/haskell-flake";
-    kamoii-replica.url = "git+file:///home/nixos/fix/kamoii-replica";
-    kamoii-replica.flake = false;
-    check-flake.url = "github:srid/check-flake";
+    common.follows = "kamoii-replica/common";
+    nixpkgs.follows = "common/nixpkgs";
+    kamoii-replica.url = "github:YuMingLiao/kamoii-replica";
     list-zipper.url = "github:system-f/list-zipper";
     list-zipper.flake = false;
   };
   outputs =
     inputs@{
       self,
-      nixpkgs,
-      flake-parts,
-      haskell-flake,
+      common,
       ...
     }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = nixpkgs.lib.systems.flakeExposed;
-      imports = [ 
-        inputs.haskell-flake.flakeModule 
-        inputs.check-flake.flakeModule
-      ];
+    common.lib.mkFlake { inherit inputs; } {
 
       perSystem =
         {
@@ -32,29 +22,18 @@
           ...
         }:
         {
-          haskellProjects.ghc9101 = {
-            basePackages = pkgs.haskell.packages.ghc9101;
-            defaults.packages = { };
-            settings = {
-              list-zipper.jailbreak = true;
-              websockets.jailbreak = true;
-              bytebuild.jailbreak = true;
-              chronos.jailbreak = true;
-            };
-            packages = {
-              list-zipper.source = inputs.list-zipper;
-              websockets.source = "0.13.0.0";
-            };
-          };
-
           haskellProjects.default = {
+            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
+            imports = [inputs.kamoii-replica.haskellFlakeProjectModules.output];
             projectRoot = builtins.toString (pkgs.lib.fileset.toSource {
               root = ./.;
               fileset = pkgs.lib.fileset.difference ./. ./flake.nix; 
             });
-            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
-
+            settings = {
+              list-zipper.jailbreak = true;
+            };
             packages = {
+              list-zipper.source = inputs.list-zipper;
               replica.source = inputs.kamoii-replica;
             };
             devShell = {
@@ -65,8 +44,8 @@
                 ];
               };
             };
-
           };
+
           packages.default = self'.packages.concur-control;
           checks.default = pkgs.stdenv.mkDerivation {
             name = "test orr";

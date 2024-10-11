@@ -15,6 +15,28 @@
         "type": "github"
       }
     },
+    "common": {
+      "inputs": {
+        "check-flake": "check-flake",
+        "flake-parts": "flake-parts",
+        "haskell-flake": "haskell-flake",
+        "nixpkgs": "nixpkgs",
+        "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1728624059,
+        "narHash": "sha256-NEEJISOaVHqDYptNHpMyr3JrdCu23WFVRFVYGKn684c=",
+        "owner": "YuMingLiao",
+        "repo": "common",
+        "rev": "52bf9e36af1c8030c1c3bfebc9405074b290513d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "YuMingLiao",
+        "repo": "common",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
@@ -49,19 +71,26 @@
       }
     },
     "kamoii-replica": {
-      "flake": false,
+      "inputs": {
+        "common": "common",
+        "nixpkgs": [
+          "kamoii-replica",
+          "common",
+          "nixpkgs"
+        ]
+      },
       "locked": {
-        "lastModified": 1728558620,
-        "narHash": "sha256-JfLXXm1C0j10Oz1XC9d+3/51Yz2Kb9cIoIlRIB/MzIA=",
-        "ref": "refs/heads/dev",
-        "rev": "0cdcd31dc51e6abcbceb8fef8d9df0364bff23f3",
-        "revCount": 115,
-        "type": "git",
-        "url": "file:///home/nixos/fix/kamoii-replica"
+        "lastModified": 1728624942,
+        "narHash": "sha256-wk9Ym2xa2z+4DK2zOReb2HMctxqoUTB1DU3b5D0yNCg=",
+        "owner": "YuMingLiao",
+        "repo": "kamoii-replica",
+        "rev": "4189d42b12ba1f5d84ea0ebdd826289b41386d33",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:///home/nixos/fix/kamoii-replica"
+        "owner": "YuMingLiao",
+        "repo": "kamoii-replica",
+        "type": "github"
       }
     },
     "list-zipper": {
@@ -84,13 +113,13 @@
       "locked": {
         "lastModified": 1728538411,
         "narHash": "sha256-f0SBJz1eZ2yOuKUr5CA9BHULGXVSn6miBuUWdTyhUhU=",
-        "owner": "NixOS",
+        "owner": "nixos",
         "repo": "nixpkgs",
         "rev": "b69de56fac8c2b6f8fd27f2eca01dcda8e0a4221",
         "type": "github"
       },
       "original": {
-        "owner": "NixOS",
+        "owner": "nixos",
         "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
         "type": "github"
@@ -110,12 +139,27 @@
     },
     "root": {
       "inputs": {
-        "check-flake": "check-flake",
-        "flake-parts": "flake-parts",
-        "haskell-flake": "haskell-flake",
+        "common": [
+          "kamoii-replica",
+          "common"
+        ],
         "kamoii-replica": "kamoii-replica",
-        "list-zipper": "list-zipper",
-        "nixpkgs": "nixpkgs"
+        "list-zipper": "list-zipper"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
       }
     }
   },
