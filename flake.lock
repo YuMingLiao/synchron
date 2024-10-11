@@ -144,7 +144,11 @@
           "common"
         ],
         "kamoii-replica": "kamoii-replica",
-        "list-zipper": "list-zipper"
+        "list-zipper": "list-zipper",
+        "nixpkgs": [
+          "common",
+          "nixpkgs"
+        ]
       }
     },
     "systems": {
