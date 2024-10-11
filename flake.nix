@@ -5,9 +5,9 @@
     haskell-flake.url = "github:srid/haskell-flake";
     kamoii-replica.url = "git+file:///home/nixos/fix/kamoii-replica";
     kamoii-replica.flake = false;
-    replica.url = "git+file:///home/nixos/fix/replica";
-    replica.flake = false;
     check-flake.url = "github:srid/check-flake";
+    list-zipper.url = "github:system-f/list-zipper";
+    list-zipper.flake = false;
   };
   outputs =
     inputs@{
@@ -42,18 +42,11 @@
               chronos.jailbreak = true;
             };
             packages = {
+              list-zipper.source = inputs.list-zipper;
               websockets.source = "0.13.0.0";
             };
           };
 
-          haskellProjects.no-session-synchron = {
-            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
-
-            packages = {
-              replica.source = inputs.replica;
-            };
-
-          };
           haskellProjects.default = {
             projectRoot = builtins.toString (pkgs.lib.fileset.toSource {
               root = ./.;
