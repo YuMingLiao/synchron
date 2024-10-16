@@ -39,6 +39,7 @@ import qualified Control.Monad as M (forever)
 import Control.Concurrent.STM.TQueue
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.Async (race)
+import qualified Replica.Types as R (Context)
 
 newtype HTML = HTML { runHTML :: Context HTML () -> R.HTML }
   deriving (Semigroup, Monoid)
@@ -51,16 +52,18 @@ minute n = Ch.Timespan (n * 1000000000 * 60)
 compose2 :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 compose2 g f x y = g (f x y)
 
+type SynWithContext = R.Context -> Syn Replica.DOM.HTML ()
 runReplica :: Syn Replica.DOM.HTML () -> IO ()
-runReplica p = runWithHeader 3985 [] p
+runReplica p = runWithHeader 3985 [] (\_ -> p)
 
-runReplica' :: Int -> Syn Replica.DOM.HTML () -> IO ()
+runReplica' :: Int -> SynWithContext -> IO ()
 runReplica' port p = runWithHeader port [] p
 
-runWithHeader :: Int -> R.HTML -> Syn Replica.DOM.HTML () -> IO ()
-runWithHeader port h p = do
+runWithHeader :: Int -> R.HTML -> SynWithContext -> IO ()
+runWithHeader port h p' = do
   let nid = NodeId 0
-  (flip Replica.app) (Warp.run port) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure (Nothing, Nothing, Nothing))) $ \(mq,mctx,mblock) -> liftIO $ do
+  (flip Replica.app) (Warp.run port) $ Replica.Config "Synchron" h defaultConnectionOptions Prelude.id logAction (minute 5) (minute 5) (liftIO (pure (Nothing, Nothing, Nothing))) $ \callbackCtx (mq,mctx,mblock) -> liftIO $ do
+    let p = p' callbackCtx
     q <- maybe newTQueueIO pure mq
     ctx <- maybe (newMVar (Just (0, p, E, q))) pure mctx
     block <- maybe (newMVar ()) pure mblock 

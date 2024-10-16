@@ -24,11 +24,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1728626944,
-        "narHash": "sha256-FgK+sZ8At9/XgONZOYIAZ/lh5ke1oLHExe9ESIIgPTE=",
+        "lastModified": 1729051058,
+        "narHash": "sha256-wpHIK3ew+OE/1XxkpQciCd/s2H8TWYwzStF85o77Rhw=",
         "owner": "YuMingLiao",
         "repo": "common",
-        "rev": "73150f32deed7f171c1b39dfea6849aaaf0602f5",
+        "rev": "4bc109d581418bd6f35db3e2c420dbbb5693338a",
         "type": "github"
       },
       "original": {
@@ -82,17 +82,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1728628394,
-        "narHash": "sha256-vMRAAkWo5g8PBvT2/1xsNEOxN7Y2n0khJDA45Mr0PVw=",
-        "owner": "YuMingLiao",
-        "repo": "kamoii-replica",
-        "rev": "997e42a022ddf2bd0eaed639f6d21fb8e46052fe",
-        "type": "github"
+        "lastModified": 1729070727,
+        "narHash": "sha256-5aOAnM0cn8DVqEatwqVbVvXiklqYzttR3jDZc2x2YHE=",
+        "ref": "refs/heads/callback",
+        "rev": "9163d99e72e7006475ee647ceb9d8eceb6ec56bf",
+        "revCount": 123,
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
       },
       "original": {
-        "owner": "YuMingLiao",
-        "repo": "kamoii-replica",
-        "type": "github"
+        "type": "git",
+        "url": "file:///home/nixos/fix/kamoii-replica"
       }
     },
     "list-zipper": {
