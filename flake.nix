@@ -42,7 +42,6 @@
 
               mkShellArgs = {
                 packages = hp: with hp; [
-                  tasty
                 ];
               };
             };

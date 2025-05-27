@@ -18,7 +18,7 @@ extractResult (A.Error e)   = error e
 
 data Target = Target
   { targetValue :: T.Text
-  }
+  } deriving Show
 
 instance A.FromJSON Target where
   parseJSON (A.Object o) = Target
@@ -29,14 +29,14 @@ data BaseEvent = BaseEvent
   { bubbles          :: !Bool
   , cancelable       :: !Bool
   , composed         :: !Bool
-  , currentTarget    :: !Target
+  , currentTarget    :: !(Maybe Target)
   , defaultPrevented :: !Bool
   , eventPhase       :: !Int
   , target           :: !Target
   , timeStamp        :: !Double
   , eventType        :: !T.Text
   , isTrusted        :: !Bool
-  }
+  } deriving Show
 
 instance A.FromJSON BaseEvent where
   parseJSON (A.Object o) = BaseEvent
