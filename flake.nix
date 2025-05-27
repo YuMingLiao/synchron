@@ -9,11 +9,7 @@
     list-zipper.flake = false;
   };
   outputs =
-    inputs@{
-      self,
-      common,
-      ...
-    }:
+    inputs@{ self, common, ... }:
     common.lib.mkFlake { inherit inputs; } {
 
       perSystem =
@@ -26,11 +22,13 @@
         {
           haskellProjects.default = {
             basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
-            imports = [inputs.kamoii-replica.haskellFlakeProjectModules.output];
-            projectRoot = builtins.toString (pkgs.lib.fileset.toSource {
-              root = ./.;
-              fileset = pkgs.lib.fileset.difference ./. ./flake.nix; 
-            });
+            imports = [ inputs.kamoii-replica.haskellFlakeProjectModules.output ];
+            projectRoot = builtins.toString (
+              pkgs.lib.fileset.toSource {
+                root = ./.;
+                fileset = pkgs.lib.fileset.difference ./. ./flake.nix;
+              }
+            );
             settings = {
               list-zipper.jailbreak = true;
             };
@@ -38,25 +36,28 @@
               list-zipper.source = inputs.list-zipper;
               replica.source = inputs.kamoii-replica;
             };
-            devShell = {
-
-              mkShellArgs = {
-                packages = hp: with hp; [
-                ];
-              };
-            };
           };
-
           packages.default = self'.packages.concur-control;
+          devShells.final = pkgs.mkShell {
+            packages = [ (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (p: [ p.concur-control ]))];
+          };
           checks.default = pkgs.stdenv.mkDerivation {
             name = "test orr";
             src = ./test;
-            buildInputs = [(config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (p: with p; [tasty tasty-hunit concur-control]))];
-            buildPhase =''
+            buildInputs = [
+              (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (
+                p: with p; [
+                  tasty
+                  tasty-hunit
+                  concur-control
+                ]
+              ))
+            ];
+            buildPhase = ''
               runghc testOrBlock 
             '';
 
-          }; 
+          };
         };
     };
 }
