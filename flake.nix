@@ -19,14 +19,17 @@
           system,
           ...
         }:
-        {
-          _module.args.pkgs = import inputs.nixpkgs {
+
+        let
+          pkgs' = import inputs.nixpkgs {
             inherit system;
             overlays = [ inputs.self.overlays.default ];
           };
+        in
+        {
 
           haskellProjects.default = {
-            basePackages = pkgs.haskell.packages.ghc965;#config.haskellProjects.ghc965.outputs.finalPackages;
+            basePackages = pkgs'.haskell.packages.ghc965; # config.haskellProjects.ghc965.outputs.finalPackages;
             imports = [ inputs.kamoii-replica.haskellFlakeProjectModules.output ];
             projectRoot = builtins.toString (
               pkgs.lib.fileset.toSource {
