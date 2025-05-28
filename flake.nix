@@ -20,11 +20,6 @@
           ...
         }:
         {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            overlays = [ inputs.self.overlays.default ];
-          };
-
           haskellProjects.default = {
             basePackages = config.haskellProjects.ghc965.outputs.finalPackages;
             imports = [ inputs.kamoii-replica.haskellFlakeProjectModules.output ];
@@ -81,9 +76,5 @@
 
           };
         };
-      flake = {
-        overlays.default = import ./overlay.nix;
-      };
-
     };
 }
