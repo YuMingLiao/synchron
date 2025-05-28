@@ -39,6 +39,7 @@
             );
             settings = {
               list-zipper.jailbreak = true;
+              ghc.haddock = false;
             };
             packages = {
               list-zipper.source = inputs.list-zipper;
@@ -57,14 +58,6 @@
           devShells.final = pkgs.mkShell {
             name = "my-haskell-package custom development shell";
             inputsFrom = [ config.haskellProjects.default.outputs.devShell ];
-            #nativeBuildInputs = with pkgs; [
-            #  (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (p: [ p.concur-control ])) 
-            #];
-            #packages = with pkgs; [
-            #  cabal-install
-            #  ghcid
-            #  (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (p: [ p.concur-control ]))
-            #];
           };
           checks.default = pkgs.stdenv.mkDerivation {
             name = "test orr";
@@ -84,9 +77,5 @@
 
           };
         };
-      flake = {
-        overlays.default = import ./overlay.nix;
-      };
-
     };
 }
