@@ -30,18 +30,17 @@ let
 in
 
 {
-#  haskell = (prev.haskell or { }) // {
-#    lib = (prev.haskell.lib or { }) // {
-#      inherit noHaddocks;
-#      inherit noChecks;
-#      inherit properExtend;
-#    };
+  haskell = (prev.haskell or { }) // {
+    lib = (prev.haskell.lib or { }) // {
+      inherit noHaddocks;
+      inherit noChecks;
+      inherit properExtend;
+    };
 
     packages = prev.haskell.packages // {
-      ghc965 = prev.haskell.packages.ghc965.override {
+      ghc965 = final.haskell.lib.noHaddocks (prev.haskell.packages.ghc965.override {
         overrides = hfinal: hprev: {
-          ghc = final.haskell.lib.dontHaddock hprev.ghc;
-        };
+        };});
         
       };
     };

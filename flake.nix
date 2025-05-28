@@ -20,8 +20,13 @@
           ...
         }:
         {
+          _module.args.pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [ inputs.self.overlays.default ];
+          };
+
           haskellProjects.default = {
-            basePackages = config.haskellProjects.ghc965.outputs.finalPackages;
+            basePackages = pkgs.haskell.packages.ghc965;#config.haskellProjects.ghc965.outputs.finalPackages;
             imports = [ inputs.kamoii-replica.haskellFlakeProjectModules.output ];
             projectRoot = builtins.toString (
               pkgs.lib.fileset.toSource {
@@ -44,8 +49,8 @@
               #hlsCheck.enable = false;
             };
           };
-          #packages.default = self'.packages.concur-control;
-          packages.default = self'.packages;
+          packages.default = self'.packages.concur-control;
+          #packages.default = self'.packages;
           devShells.final = pkgs.mkShell {
             name = "my-haskell-package custom development shell";
             inputsFrom = [ config.haskellProjects.default.outputs.devShell ];
@@ -76,5 +81,9 @@
 
           };
         };
+      flake = {
+        overlays.default = import ./overlay.nix;
+      };
+
     };
 }
