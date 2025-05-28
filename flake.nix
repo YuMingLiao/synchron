@@ -20,16 +20,10 @@
           ...
         }:
 
-        let
-          pkgs' = import inputs.nixpkgs {
-            inherit system;
-            overlays = [ inputs.self.overlays.default ];
-          };
-        in
         {
 
           haskellProjects.default = {
-            basePackages = pkgs'.haskell.packages.ghc965; # config.haskellProjects.ghc965.outputs.finalPackages;
+            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
             imports = [ inputs.kamoii-replica.haskellFlakeProjectModules.output ];
             projectRoot = builtins.toString (
               pkgs.lib.fileset.toSource {
@@ -39,7 +33,6 @@
             );
             settings = {
               list-zipper.jailbreak = true;
-              ghc.haddock = false;
             };
             packages = {
               list-zipper.source = inputs.list-zipper;
@@ -52,6 +45,9 @@
               };
               #hlsCheck.enable = false;
             };
+            otherOverlays = [
+            #(final: prev: { ghc = pkgs.haskell.lib.dontHaddock prev.ghc;}) 
+            ];
           };
           packages.default = self'.packages.concur-control;
           #packages.default = self'.packages;
