@@ -11,17 +11,22 @@
   outputs =
     inputs@{ self, common, ... }:
     common.lib.mkFlake { inherit inputs; } {
-
       perSystem =
         {
           self',
           pkgs,
           config,
+          system,
           ...
         }:
         {
+          _module.args.pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [ inputs.self.overlays.default ];
+          };
+
           haskellProjects.default = {
-            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
+            basePackages = config.haskellProjects.ghc965.outputs.finalPackages;
             imports = [ inputs.kamoii-replica.haskellFlakeProjectModules.output ];
             projectRoot = builtins.toString (
               pkgs.lib.fileset.toSource {
@@ -36,10 +41,27 @@
               list-zipper.source = inputs.list-zipper;
               replica.source = inputs.kamoii-replica;
             };
+            devShell = {
+              tools = hp: {
+                haskell-language-server = null;
+                hlint = null;
+              };
+              #hlsCheck.enable = false;
+            };
           };
-          packages.default = self'.packages.concur-control;
+          #packages.default = self'.packages.concur-control;
+          packages.default = self'.packages;
           devShells.final = pkgs.mkShell {
-            packages = [ (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (p: [ p.concur-control ]))];
+            name = "my-haskell-package custom development shell";
+            inputsFrom = [ config.haskellProjects.default.outputs.devShell ];
+            #nativeBuildInputs = with pkgs; [
+            #  (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (p: [ p.concur-control ])) 
+            #];
+            #packages = with pkgs; [
+            #  cabal-install
+            #  ghcid
+            #  (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (p: [ p.concur-control ]))
+            #];
           };
           checks.default = pkgs.stdenv.mkDerivation {
             name = "test orr";
@@ -59,5 +81,9 @@
 
           };
         };
+      flake = {
+        overlays.default = import ./overlay.nix;
+      };
+
     };
 }
