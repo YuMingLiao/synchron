@@ -23,7 +23,7 @@
         {
 
           haskellProjects.default = {
-            basePackages = config.haskellProjects.ghc9101.outputs.finalPackages;
+            basePackages = config.haskellProjects.ghc965.outputs.finalPackages;
             imports = [ inputs.kamoii-replica.haskellFlakeProjectModules.output ];
             projectRoot = builtins.toString (
               pkgs.lib.fileset.toSource {
@@ -43,6 +43,7 @@
                 haskell-language-server = null;
                 hlint = null;
               };
+              hoogle = false;
               #hlsCheck.enable = false;
             };
             otherOverlays = [
