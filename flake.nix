@@ -43,6 +43,7 @@
                 haskell-language-server = null;
                 hlint = null;
               };
+
               hoogle = false;
               #hlsCheck.enable = false;
             };
@@ -51,10 +52,16 @@
             ];
           };
           packages.default = self'.packages.concur-control;
-          #packages.default = self'.packages;
           devShells.final = pkgs.mkShell {
-            name = "my-haskell-package custom development shell";
+            name = "A shell that has the final concur-control";
             inputsFrom = [ config.haskellProjects.default.outputs.devShell ];
+            nativeBuildInputs = [
+              (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (
+                p: with p; [
+                  concur-control
+                ]
+              ))
+            ];
           };
           checks.default = pkgs.stdenv.mkDerivation {
             name = "test orr";
