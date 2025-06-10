@@ -1,4 +1,5 @@
 .stack-work/
+dist-newstyle/
 concur-control.cabal
 *~
 concur-control.nix
