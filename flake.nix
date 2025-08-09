@@ -2,9 +2,11 @@
   inputs = rec {
     flake-parts.url = "github:hercules-ci/flake-parts";
     haskell-flake.url = "github:srid/haskell-flake";
-    kamoii-replica.url = "git+file:///home/nixos/fix/kamoii-replica";
+    #kamoii-replica.url = "git+file:///home/nixos/fix/kamoii-replica";
+    kamoii-replica.url = "github:YuMingLiao/kamoii-replica";
     kamoii-replica.flake = false;
-    replica.url = "git+file:///home/nixos/fix/replica";
+    #replica.url = "git+file:///home/nixos/fix/replica";
+    replica.url = "github:YumingLiao/replica";
     replica.flake = false;
   };
   outputs =
