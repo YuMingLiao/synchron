@@ -39,15 +39,18 @@ instance MonadIO Managed where
         a <- effect $ m
         return_ a )
 
+-- v is gone in m a, maybe need to redesign Managed type
+-- I don't think a runManaged Syn block is much better than callback style like two websockets example. 
 class MonadSyn m where
   liftSyn :: Syn v a -> m a
 
-{- turn a Syn to a Managed. What about v? use exhaust or run? 
+-- seems lift Syn into Managed couldn't make it sequencial exetuable. 
+
 instance MonadSyn Managed where
     liftSyn m = Managed (\return_ -> do
         a <- m
         return_ a )
--}
+
 instance Semigroup a => Semigroup (Managed a) where
     (<>) = liftA2 (<>)
 
@@ -64,16 +67,22 @@ instance MonadManaged Managed where
 managed :: (forall v r. (a -> Syn v r) -> Syn v r) -> Managed a
 managed f = using (Managed f)
 
+-- it returns a Syn v a, but still can't use events inside because it is a Managed a.
 runManaged :: Monoid v => Managed a -> Syn v a
 runManaged m = m >>- return
 
+{-
 foo :: Syn HTML (Syn HTML a)
 foo = do
+  runManaged $ do
+    e <- managed local
+    res <- liftSyn $ orr [await e, emit e 1]
+    pure res
+-}
+bar :: Syn HTML (Syn HTML a)
+bar = do
   runManaged $ do
     as <- replicateM 2 $ managed local
     pure (orr (map await as))
 
-bar :: Syn HTML (Event Internal a)
-bar = do
-  e1 <- local $ return
-  pure e1
+

@@ -21,10 +21,16 @@ p1 = local $ \e -> do
   a <- orr [ effect (do threadDelay 5000000; print "hello"; pure 1;) , effect (do pure 2;)]
   pure a
 
+p2 = local $ \e -> do
+  a <- orr [ effect (do threadDelay 5000000; print "5"; pure 1;) , effect (do threadDelay 3000000; print "3"; pure 2;)]
+  pure a
+
+
 test :: (Show a, Eq a) => Syn () a -> a -> Assertion
 test f a = ((fromJust . fst) <$> exhaust localNid f) >>= (@?= a)
 
 main :: IO ()
 main = defaultMain $ testGroup "Example tests"
   [ testCase "p1" $ test p1 2
+  , testCase "p2" $ test p2 2
   ]

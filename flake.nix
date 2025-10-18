@@ -59,6 +59,9 @@
               (config.haskellProjects.default.outputs.finalPackages.ghcWithPackages (
                 p: with p; [
                   concur-control
+                  tasty
+                  tasty-hunit
+
                 ]
               ))
             ];

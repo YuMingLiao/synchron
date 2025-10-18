@@ -24,11 +24,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1749785774,
-        "narHash": "sha256-6SEceGJbh45r8rtYleDYOS1KgHOD7N3YAlqaRodwN3Q=",
+        "lastModified": 1749476249,
+        "narHash": "sha256-Jv/XxY5AVMFKUj5Rez/c07u+FdCXa5+skQs6TWMnDgc=",
         "owner": "YuMingLiao",
         "repo": "common",
-        "rev": "9dd4784079a240b672bdb71ef919101920bccc36",
+        "rev": "63417dfbd0e77c190f30b736c474bd807c0f894d",
         "type": "github"
       },
       "original": {
@@ -82,11 +82,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1749865906,
-        "narHash": "sha256-WBaprnKyvgYYMDAhEAICUlTQ4pY+3URezqrsXZPKUA4=",
+        "lastModified": 1748437451,
+        "narHash": "sha256-1bmHWM+8ybf9B6H7S7r4ZkArplVhusVaih9wnl1XPaw=",
         "ref": "refs/heads/callback",
-        "rev": "74ad9e89527e177acbb1c73536b4f206c99956bd",
-        "revCount": 133,
+        "rev": "63605cd6fa23f3f92944a5d5724ec58fc65758c4",
+        "revCount": 129,
         "type": "git",
         "url": "file:///home/nixos/fix/kamoii-replica"
       },

@@ -112,4 +112,4 @@ testLoading = do
     _ <- (effect $ threadDelay 2000000) <|> text "loading"
     text "loaded"
 
-main = testLoading
+main = testOrrs
