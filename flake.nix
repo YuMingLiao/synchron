@@ -7,6 +7,13 @@
     kamoii-replica.inputs.common.follows = "common";
     list-zipper.url = "github:system-f/list-zipper";
     list-zipper.flake = false;
+    higgledy = {
+      type = "github";
+      owner = "i-am-tom";
+      repo = "higgledy";
+      flake = false;
+    };
+
   };
   outputs =
     inputs@{ self, common, ... }:
@@ -33,10 +40,13 @@
             );
             settings = {
               list-zipper.jailbreak = true;
+              higgledy.jailbreak = true;
+              higgledy.check = false;
             };
             packages = {
               list-zipper.source = inputs.list-zipper;
               replica.source = inputs.kamoii-replica;
+              higgledy.source = inputs.higgledy;
             };
             devShell = {
               tools = hp: {
@@ -48,7 +58,7 @@
               #hlsCheck.enable = false;
             };
             otherOverlays = [
-            #(final: prev: { ghc = pkgs.haskell.lib.dontHaddock prev.ghc;}) 
+              #(final: prev: { ghc = pkgs.haskell.lib.dontHaddock prev.ghc;})
             ];
           };
           packages.default = self'.packages.concur-control;
@@ -61,7 +71,7 @@
                   concur-control
                   tasty
                   tasty-hunit
-
+                  higgledy
                 ]
               ))
             ];

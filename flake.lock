@@ -70,6 +70,22 @@
         "type": "github"
       }
     },
+    "higgledy": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1724166923,
+        "narHash": "sha256-P6E7jI9OyuLlYAIlSN1a5akyVpHGiArBqY2mRsJKqfA=",
+        "owner": "i-am-tom",
+        "repo": "higgledy",
+        "rev": "cb1d97911375e6ef71763565c7e53a6d42d7fff1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "i-am-tom",
+        "repo": "higgledy",
+        "type": "github"
+      }
+    },
     "kamoii-replica": {
       "inputs": {
         "common": [
@@ -141,6 +157,7 @@
     "root": {
       "inputs": {
         "common": "common",
+        "higgledy": "higgledy",
         "kamoii-replica": "kamoii-replica",
         "list-zipper": "list-zipper",
         "nixpkgs": [
