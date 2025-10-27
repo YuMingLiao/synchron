@@ -52,7 +52,7 @@ import Data.Text (Text, pack)
 import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
 
 string = text . pack . show
-main = runReplica spawnButtonInStream 
+main = runReplica twoLoopsWithSameVar 
 
 -- works
 textInStream = pool $ \p -> var "a" $ \v -> do
@@ -78,26 +78,30 @@ buttonInStream = pool $ \p -> var "a" $ \v -> do
 
 -- works 
 spawnButtonInStream = pool $ \p -> var "a" $ \v -> do
-  spawn p $ changeString v
+  spawn p $ changeString v 0
   spawn p $ showString v
   Syn.forever
   where
     showString v = loop v $ stream $ \s -> do
        button [Left () <$ onClick] [string s]
-    changeString v = do
+    changeString v n = do
       button [onClick] [text "click"]
-      putVar v "b"
+      putVar v (show n)
+      changeString v (n+1)
 
+-- works
 twoLoopsWithSameVar = pool $ \p -> var "a" $ \v -> do
-  spawn p $ changeString v
-  spawn p $ showString v
+  spawn p $ changeString v 0
+  spawn p $ showString1 v
+  spawn p $ showString2 v
   Syn.forever
   where
-    showString v = loop v $ stream $ \s -> do
+    showString1 v = loop v $ stream $ \s -> do
        button [Left () <$ onClick] [string s]
-    showString v = loop v $ stream $ \s -> do
+    showString2 v = loop v $ stream $ \s -> do
        button [Left () <$ onClick] [string s]
  
-    changeString v = do
+    changeString v n = do
       button [onClick] [text "click"]
-      putVar v "b"
+      putVar v (show n)
+      changeString v (n+1)

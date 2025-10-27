@@ -20,8 +20,6 @@ counter x = do
   div [ onClick ] [ text (T.pack $ show x) ]
   counter (x + 1)
 
-
-
 reactText v = loop v $ stream $ \s -> do
   div [ onClick ] [ text "CLICK ME!!!" ]
   counter 0

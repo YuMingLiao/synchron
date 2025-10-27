@@ -51,6 +51,7 @@ import Data.Generic.HKD
 import Data.Text (Text)
 import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
 
+-- not sure when to use readVar. When I want to use the value but don't want to be streamed?
 
 main = runReplica twoReadVars
 
