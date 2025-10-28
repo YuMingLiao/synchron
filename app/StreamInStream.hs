@@ -52,7 +52,7 @@ import Data.Text (Text, pack)
 import Control.Lens ((.~), (^.), (&), Const (..), Identity, anyOf)
 
 string = text . pack . show
-main = runReplica streamInStream 
+main = runReplica streamInStream2
 
 
 -- amazing! two streams work!
@@ -63,6 +63,21 @@ streamInStream = pool $ \p -> var "a" $ \v -> var "b" $ \v1 -> do
   where
     showString v v1 = loop v $ stream $ \s -> loop v1 $ stream $ \s1 -> do
       string (s ++ s1)
+    changeString v = do
+      button [onClick] [text "click"]
+      putVar v "c"
+
+-- mimic useEffect with dependency array of two elements
+streamInStream2 = pool $ \p -> var "a" $ \v -> var "b" $ \v1 -> do
+  spawn p $ changeString v
+  spawn p $ changeString v1
+  useEffect v v1
+  where
+    useEffect v v1 = 
+      loop v $ stream $ \s -> 
+      loop v1 $ stream $ \s1 -> do
+        io $ putStr (s ++ s1)
+        empty
     changeString v = do
       button [onClick] [text "click"]
       putVar v "c"
