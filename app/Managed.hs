@@ -1,11 +1,14 @@
 module Managed where
-import Syn
+import Syn hiding (await, emit)
+import qualified Syn (await, emit)
+import Var hiding (var)
+import qualified Var (var)
 import Control.Monad.IO.Class 
 import Control.Applicative (liftA2)
-import Replica.DOM
+import Replica.DOM hiding (var)
 import Control.Monad
 
-newtype Managed a = Managed { (>>-) :: forall v r. (a -> Syn v r) -> Syn v r }
+newtype Managed v a = Managed { (>>-) :: forall r. (a -> Syn v r) -> Syn v r }
 
 -- the original a in Managed, a.k.a x
 -- first, f it.
@@ -14,12 +17,12 @@ newtype Managed a = Managed { (>>-) :: forall v r. (a -> Syn v r) -> Syn v r }
 -- then use lambda to leave room for (a -> Syn v r)
 -- You can still have a ConT style f while also get "functored"
 --
-instance Functor Managed where
+instance Functor (Managed v) where
     fmap f mx = Managed (\return_ ->
         mx >>- \x ->
         return_ (f x) )
 
-instance Applicative Managed where
+instance Applicative (Managed v) where
     pure r    = Managed (\return_ ->
         return_ r )
 
@@ -28,21 +31,19 @@ instance Applicative Managed where
         mx >>- \x ->
         return_ (f x) )
 
-instance Monad Managed where
+instance Monad (Managed v) where
     ma >>= f = Managed (\return_ ->
         ma  >>- \a ->
         f a >>- \b ->
         return_ b )
 
-instance MonadIO Managed where
+instance MonadIO (Managed v) where
     liftIO m = Managed (\return_ -> do
         a <- effect $ m
         return_ a )
 
--- v is gone in m a, maybe need to redesign Managed type
--- I don't think a runManaged Syn block is much better than callback style like two websockets example. 
 class MonadSyn m where
-  liftSyn :: Syn v a -> m a
+  liftSyn :: Syn v a -> m v a
 
 -- seems lift Syn into Managed couldn't make it sequencial exetuable. 
 
@@ -51,38 +52,57 @@ instance MonadSyn Managed where
         a <- m
         return_ a )
 
-instance Semigroup a => Semigroup (Managed a) where
+instance Semigroup a => Semigroup (Managed v a) where
     (<>) = liftA2 (<>)
 
-instance Monoid a => Monoid (Managed a) where
+instance Monoid a => Monoid (Managed v a) where
     mempty = pure mempty
 
-class MonadIO m => MonadManaged m where
-    using :: Managed a -> m a
+class MonadSyn m => MonadManaged m where
+    using :: Managed v a -> m v a
 
 instance MonadManaged Managed where
-    using = id
+    using = id 
 
 -- | Build a `Managed` value
-managed :: (forall v r. (a -> Syn v r) -> Syn v r) -> Managed a
+managed :: (forall v r. (a -> Syn v r) -> Syn v r) -> Managed v a
 managed f = using (Managed f)
 
--- it returns a Syn v a, but still can't use events inside because it is a Managed a.
-runManaged :: Monoid v => Managed a -> Syn v a
+runManaged :: Monoid v => Managed v a -> Syn v a
 runManaged m = m >>- return
 
-{-
-foo :: Syn HTML (Syn HTML a)
+
+runManagedHTML :: Managed HTML a -> Syn HTML a
+runManagedHTML = runManaged
+
+emit :: Event Internal a -> a -> Syn HTML ()
+emit = Syn.emit
+
+await :: Event t a -> Syn HTML a
+await = Syn.await
+
+
+var :: (Semigroup a, Monoid v) => a -> (Var a -> Syn v b) -> Syn v b 
+var = Var.var
+-- runReplica foo
+foo :: Syn HTML ()
 foo = do
   runManaged $ do
     e <- managed local
-    res <- liftSyn $ orr [await e, emit e 1]
-    pure res
--}
-bar :: Syn HTML (Syn HTML a)
+    r <- liftSyn $ orr [await e, emit e ()]
+    liftSyn . io $ print r
+    pure r
+
+-- runReplica (bar >> pure ())
+bar :: Syn HTML ((),())
 bar = do
-  runManaged $ do
-    as <- replicateM 2 $ managed local
-    pure (orr (map await as))
+  runManagedHTML $ do
+    e1 <- managed local
+    e2 <- managed local
+    -- var can't offer a v with Monoid v. And offer HTML is not enough.
+    -- v <- managed (var "a")
+    r <- liftSyn $ andd (emit e1 (), emit e2 ())
+    liftSyn . io $ print r
+    pure r
 
-
+-- since local $ \e -> can be aligned, so I don't see the usefulness of runManaged.
